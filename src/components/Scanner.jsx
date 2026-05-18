@@ -58,6 +58,29 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {isCameraOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: '400px', backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Scan Barcode/QR</h3>
+              <button 
+                onClick={() => setIsCameraOpen(false)}
+                className="btn btn-xs"
+                style={{ backgroundColor: 'rgba(255,59,48,0.1)', color: 'var(--danger)', padding: '6px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div id="reader" style={{ width: '100%', borderRadius: '8px', overflow: 'hidden' }}></div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: '12px' }}>
         <form onSubmit={handleSubmit} style={{ flex: 1, position: 'relative' }}>
           <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />

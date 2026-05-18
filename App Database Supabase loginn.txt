@@ -13,7 +13,7 @@ But login with GitHub
 Vercel load full online project : 
 Login with GitHub : tejas7.tpf@gmail.com
 
-
+link deploy :https://easyscan-three.vercel.app/
 
 GitHub Login : tejas7.tpf@gmail.com
 login with google 
