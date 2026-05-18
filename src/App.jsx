@@ -126,6 +126,30 @@ const App = () => {
     localStorage.setItem('easyscan_users_v29', JSON.stringify(users));
   }, [users]);
 
+  // Auto-close Carton Info Box when all parts inside it are verified
+  useEffect(() => {
+    if (!infoBox) return;
+    const partsList = data?.parts || [];
+    const boxParts = partsList.filter(p => 
+      selectedInvoices.includes(p.invoiceNumber) && 
+      getBoxId(p).toUpperCase() === infoBox.toUpperCase()
+    );
+    if (boxParts.length === 0) return;
+    
+    const allVerified = boxParts.every(p => 
+      scannedParts.includes(getPartKey(p.partNumber, infoBox))
+    );
+    
+    if (allVerified) {
+      const timer = setTimeout(() => {
+        setInfoBox(null);
+        setIsCameraOpen(true);
+        setRecentScan({ type: 'success', text: `Box ${infoBox} fully verified! 🎉` });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [scannedParts, infoBox, data, selectedInvoices]);
+
   const handleLogin = (user) => {
     setCurrentUser(user);
     localStorage.setItem('easyscan_current_user_v29', JSON.stringify(user));
