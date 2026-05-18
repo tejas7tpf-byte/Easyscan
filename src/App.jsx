@@ -731,7 +731,7 @@ const App = () => {
       )}
 
       {activeTab === 'shipment' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '10px' }}>
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', padding: '10px' }}>
           <div style={{ flexShrink: 0, marginBottom: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -791,7 +791,7 @@ const App = () => {
       )}
 
       {activeTab === 'scan' && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '10px', position: 'relative' }}>
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', padding: '10px', position: 'relative' }}>
           
           {/* Info Box Modal Pop-up */}
           {/* Scanned Part Detail Modal (shows on camera scan match) */}
