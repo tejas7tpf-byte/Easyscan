@@ -84,6 +84,7 @@ const App = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [infoBox, setInfoBox] = useState(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const [locations, setLocations] = useState(() => {
     const saved = localStorage.getItem('easyscan_locations_v29');
@@ -502,6 +503,10 @@ const App = () => {
       setRecentScan({ type: 'success', text: `Vrf: ${partNumber}` });
     }
     triggerFocus();
+    if (auditMode === 'part') {
+      setIsCameraOpen(true);
+      setSearchQuery('');
+    }
   };
 
   const handleUnreceivePart = (partNumber, boxId) => {
@@ -583,18 +588,9 @@ const App = () => {
       }
 
       if (matchingPart) {
-        const boxId = getBoxId(matchingPart);
-        const key = getPartKey(matchingPart.partNumber, boxId);
-        if (!scannedParts.includes(key)) {
-          const nowStr = new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-          setScannedParts(prev => [...prev, key]);
-          saveSupabaseScan(currentLocation, key, 'part', currentUser);
-          setScanTimestamps(prev => ({ ...prev, [key]: nowStr }));
-          setSearchQuery(''); 
-          setRecentScan({ type: 'success', text: `Vrf: ${matchingPart.partNumber}` });
-        } else {
-          setRecentScan({ type: 'error', text: `Already Vrf: ${matchingPart.partNumber}` });
-        }
+        setSearchQuery(matchingPart.partNumber); // Show part detail
+        setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
+        setIsCameraOpen(false); // Close camera to let user press OK
       } else {
         setRecentScan({ type: 'error', text: `No Match: ${q}` });
       }
@@ -847,6 +843,8 @@ const App = () => {
               value={searchQuery}
               placeholder={auditMode === 'box' ? "Box ID (Live Search)..." : "Part/Carton (Live Search)..."} 
               focusTrigger={focusTrigger} 
+              isCameraOpenProp={isCameraOpen}
+              setIsCameraOpenProp={setIsCameraOpen}
             />
             {recentScan && (
               <div className="card" style={{ borderLeft: `4px solid ${recentScan.type === 'success' ? 'var(--success)' : 'var(--danger)'}`, padding: '4px 8px' }}>

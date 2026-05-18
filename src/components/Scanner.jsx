@@ -2,9 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera, X, Smartphone, Bluetooth, Keyboard, Search, Scan } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
-const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0 }) => {
+const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0, isCameraOpenProp, setIsCameraOpenProp }) => {
   const [inputValue, setInputValue] = useState(value);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [internalCameraOpen, setInternalCameraOpen] = useState(false);
+  
+  const isCameraOpen = setIsCameraOpenProp ? isCameraOpenProp : internalCameraOpen;
+  const setIsCameraOpen = setIsCameraOpenProp ? setIsCameraOpenProp : setInternalCameraOpen;
+  
   const inputRef = useRef(null);
 
   // Sync internal state with external value if provided
