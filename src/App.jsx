@@ -584,9 +584,10 @@ const App = () => {
       const eligibleCartons = [...new Set(parts.filter(p => selectedInvoices.includes(p.invoiceNumber)).map(p => getBoxId(p).toUpperCase()))];
       const exactCartonMatch = eligibleCartons.find(c => c === q);
       if (exactCartonMatch) {
-        setActiveCartonFilter(exactCartonMatch);
+        setInfoBox(exactCartonMatch);
+        setIsCameraOpen(false);
         setSearchQuery(''); 
-        setRecentScan({ type: 'success', text: `Filtered by Carton: ${exactCartonMatch}` });
+        setRecentScan({ type: 'success', text: `Opened Carton: ${exactCartonMatch}` });
         return;
       }
 
@@ -885,7 +886,7 @@ const App = () => {
                     <Box size={18} className="text-primary" />
                     <h3 className="font-bold text-sm">Box Contents: {infoBox}</h3>
                   </div>
-                  <button onClick={() => setInfoBox(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
+                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
                     <X size={18} />
                   </button>
                 </div>
@@ -922,7 +923,7 @@ const App = () => {
 
                 {/* Modal Footer */}
                 <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', backgroundColor: 'var(--bg-card)', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px' }}>
-                  <button onClick={() => setInfoBox(null)} className="btn btn-primary btn-sm" style={{ padding: '6px 16px', fontWeight: 700 }}>Close</button>
+                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} className="btn btn-primary btn-sm" style={{ padding: '6px 16px', fontWeight: 700 }}>Close</button>
                 </div>
               </div>
             </div>
@@ -996,7 +997,7 @@ const App = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Box size={14} color="var(--text-tertiary)" /><span className="font-semibold text-sm">{b}</span></div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <button 
-                        onClick={() => setInfoBox(b)} 
+                        onClick={() => { setInfoBox(b); setIsCameraOpen(false); }} 
                         className="btn btn-xs" 
                         style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '4px 8px' }}
                         title="View parts in this box"
@@ -1015,7 +1016,7 @@ const App = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><CheckCircle2 size={14} color="var(--success)" /><span className="font-semibold text-sm">{b}</span></div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <button 
-                            onClick={() => setInfoBox(b)} 
+                            onClick={() => { setInfoBox(b); setIsCameraOpen(false); }} 
                             className="btn btn-xs" 
                             style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '4px 8px' }}
                             title="View parts in this box"
