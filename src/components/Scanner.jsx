@@ -23,68 +23,70 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
     let html5QrCode = null;
     let lastScannedText = '';
     let lastScanTime = 0;
+    let timeoutId = null;
 
     if (isCameraOpen) {
-      html5QrCode = new Html5Qrcode("reader");
-      
-      const config = {
-        fps: 10,
-        qrbox: { width: 280, height: 150 },
-        aspectRatio: 1.0
-      };
-      
-      // Auto-start back camera with zoom attempt
-      html5QrCode.start(
-        { facingMode: "environment", advanced: [{ zoom: 2.0 }] }, 
-        config,
-        (decodedText) => {
-          const now = Date.now();
-          // Prevent duplicate scans within 2 seconds
-          if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
-            lastScannedText = decodedText;
-            lastScanTime = now;
-            onScan(decodedText);
-            
-            // Flash the screen briefly to indicate scan
-            const readerElement = document.getElementById('reader');
-            if (readerElement) {
-              readerElement.style.opacity = '0.5';
-              setTimeout(() => {
-                if (readerElement) readerElement.style.opacity = '1';
-              }, 150);
+      // Small delay to ensure the DOM element 'reader' is fully painted
+      timeoutId = setTimeout(() => {
+        try {
+          html5QrCode = new Html5Qrcode("reader");
+          
+          const config = {
+            fps: 10,
+            qrbox: { width: 280, height: 150 },
+            aspectRatio: 1.0
+          };
+          
+          html5QrCode.start(
+            { facingMode: "environment" }, 
+            config,
+            (decodedText) => {
+              const now = Date.now();
+              // Prevent duplicate scans within 2 seconds
+              if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
+                lastScannedText = decodedText;
+                lastScanTime = now;
+                onScan(decodedText);
+                
+                // Flash the screen briefly to indicate scan
+                const readerElement = document.getElementById('reader');
+                if (readerElement) {
+                  readerElement.style.opacity = '0.5';
+                  setTimeout(() => {
+                    if (readerElement) readerElement.style.opacity = '1';
+                  }, 150);
+                }
+              }
+            },
+            (errorMessage) => {
+              // Ignore parse errors
             }
-          }
-        },
-        (errorMessage) => {
-          // Parse errors are ignored
+          ).then(() => {
+            // Attempt to apply hardware zoom AFTER camera successfully starts
+            try {
+              const track = html5QrCode.getRunningTrack();
+              if (track && track.getCapabilities && track.applyConstraints) {
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                  track.applyConstraints({
+                    advanced: [{ zoom: Math.min(2.0, capabilities.zoom.max) }]
+                  }).catch(() => {});
+                }
+              }
+            } catch(e) {
+               console.warn("Hardware zoom not supported or failed", e);
+            }
+          }).catch((err) => {
+            console.error("Camera start failed", err);
+          });
+        } catch (err) {
+          console.error("Html5Qrcode initialization failed", err);
         }
-      ).catch((err) => {
-        console.error("Camera start failed", err);
-        // Fallback without zoom if advanced constraints fail
-        html5QrCode.start(
-          { facingMode: "environment" }, 
-          config,
-          (decodedText) => {
-             const now = Date.now();
-             if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
-               lastScannedText = decodedText;
-               lastScanTime = now;
-               onScan(decodedText);
-               const readerElement = document.getElementById('reader');
-               if (readerElement) {
-                 readerElement.style.opacity = '0.5';
-                 setTimeout(() => {
-                   if (readerElement) readerElement.style.opacity = '1';
-                 }, 150);
-               }
-             }
-          },
-          () => {}
-        ).catch(e => console.error("Fallback camera failed too", e));
-      });
+      }, 100);
     }
 
     return () => {
+      if (timeoutId) clearTimeout(timeoutId);
       if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
       }
