@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, X, Smartphone, Bluetooth, Keyboard, Search, Scan } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0 }) => {
   const [inputValue, setInputValue] = useState(value);
@@ -20,41 +20,74 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
   }, [focusTrigger]);
 
   useEffect(() => {
-    let scanner = null;
+    let html5QrCode = null;
     let lastScannedText = '';
     let lastScanTime = 0;
 
     if (isCameraOpen) {
-      scanner = new Html5QrcodeScanner("reader", { 
-        fps: 10, 
-        qrbox: { width: 280, height: 150 }, // Wider box is better for 1D barcodes and feels zoomed
-        aspectRatio: 1.0,
-        videoConstraints: { facingMode: "environment" }, // Force back camera
-        rememberLastUsedCamera: true
-      });
-      scanner.render((decodedText) => {
-        const now = Date.now();
-        // Prevent duplicate scans within 2 seconds
-        if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
-          lastScannedText = decodedText;
-          lastScanTime = now;
-          onScan(decodedText);
-          
-          // Flash the screen briefly to indicate scan
-          const readerElement = document.getElementById('reader');
-          if (readerElement) {
-            readerElement.style.opacity = '0.5';
-            setTimeout(() => {
-              if (readerElement) readerElement.style.opacity = '1';
-            }, 150);
+      html5QrCode = new Html5Qrcode("reader");
+      
+      const config = {
+        fps: 10,
+        qrbox: { width: 280, height: 150 },
+        aspectRatio: 1.0
+      };
+      
+      // Auto-start back camera with zoom attempt
+      html5QrCode.start(
+        { facingMode: "environment", advanced: [{ zoom: 2.0 }] }, 
+        config,
+        (decodedText) => {
+          const now = Date.now();
+          // Prevent duplicate scans within 2 seconds
+          if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
+            lastScannedText = decodedText;
+            lastScanTime = now;
+            onScan(decodedText);
+            
+            // Flash the screen briefly to indicate scan
+            const readerElement = document.getElementById('reader');
+            if (readerElement) {
+              readerElement.style.opacity = '0.5';
+              setTimeout(() => {
+                if (readerElement) readerElement.style.opacity = '1';
+              }, 150);
+            }
           }
+        },
+        (errorMessage) => {
+          // Parse errors are ignored
         }
-      }, (error) => {
-        // Handle scan error silently
+      ).catch((err) => {
+        console.error("Camera start failed", err);
+        // Fallback without zoom if advanced constraints fail
+        html5QrCode.start(
+          { facingMode: "environment" }, 
+          config,
+          (decodedText) => {
+             const now = Date.now();
+             if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
+               lastScannedText = decodedText;
+               lastScanTime = now;
+               onScan(decodedText);
+               const readerElement = document.getElementById('reader');
+               if (readerElement) {
+                 readerElement.style.opacity = '0.5';
+                 setTimeout(() => {
+                   if (readerElement) readerElement.style.opacity = '1';
+                 }, 150);
+               }
+             }
+          },
+          () => {}
+        ).catch(e => console.error("Fallback camera failed too", e));
       });
     }
+
     return () => {
-      if (scanner) scanner.clear();
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+      }
     };
   }, [isCameraOpen, onScan]);
 
