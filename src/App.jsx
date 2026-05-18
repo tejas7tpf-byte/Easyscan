@@ -87,7 +87,6 @@ const App = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [infoBox, setInfoBox] = useState(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [scannedBoxDetail, setScannedBoxDetail] = useState(null);
   const [autoConfirmParts, setAutoConfirmParts] = useState(() => {
     return localStorage.getItem('easyscan_autoconfirm_parts') === 'true';
   });
