@@ -87,6 +87,13 @@ const App = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [infoBox, setInfoBox] = useState(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [autoConfirmParts, setAutoConfirmParts] = useState(() => {
+    return localStorage.getItem('easyscan_autoconfirm_parts') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('easyscan_autoconfirm_parts', autoConfirmParts);
+  }, [autoConfirmParts]);
 
   const [locations, setLocations] = useState(() => {
     const saved = localStorage.getItem('easyscan_locations_v29');
@@ -479,7 +486,6 @@ const App = () => {
       saveSupabaseScan(currentLocation, q, 'box', currentUser);
       setRecentScan({ type: 'success', text: `Rcvd: ${q}` });
     }
-    setScannedBoxDetail(null);
     triggerFocus();
   };
 
@@ -561,10 +567,8 @@ const App = () => {
       }
       const isBox = parts.some(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
       if (isBox) {
-        // Show box detail popup instead of immediately confirming
-        const boxParts = parts.filter(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
-        setScannedBoxDetail({ boxId: q, parts: boxParts });
-        setRecentScan({ type: 'success', text: `Box Found: ${q}` });
+        // Immediately confirm box instead of showing popup
+        handleManualReceiveBox(q);
       } else {
         setRecentScan({ type: 'error', text: `No ID: ${q}` });
       }
@@ -593,14 +597,19 @@ const App = () => {
       }
 
       if (matchingPart) {
-        setScannedPartDetail(matchingPart); // Show popup modal with part detail
-        setIsCameraOpen(false); // Close camera to let user press OK
-        setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
+        if (autoConfirmParts) {
+          handleManualReceivePart(matchingPart.partNumber, getBoxId(matchingPart));
+          setRecentScan({ type: 'success', text: `Auto-Verified: ${matchingPart.partNumber}` });
+        } else {
+          setScannedPartDetail(matchingPart); // Show popup modal with part detail
+          setIsCameraOpen(false); // Close camera to let user press OK
+          setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
+        }
       } else {
         setRecentScan({ type: 'error', text: `No Match: ${q}` });
       }
     }
-  }, [auditMode, selectedInvoices, receivedBoxes, data, activeCartonFilter, scannedParts]);
+  }, [auditMode, selectedInvoices, receivedBoxes, data, activeCartonFilter, scannedParts, autoConfirmParts]);
 
   const safeShipments = data?.shipments || [];
   const safeParts = data?.parts || [];
@@ -826,38 +835,7 @@ const App = () => {
             </div>
           )}
 
-          {/* Scanned Box Detail Modal */}
-          {scannedBoxDetail && (
-            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5dvh 16px 16px', overflowY: 'auto' }}>
-              <div className="card" style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--bg-surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '2px solid var(--primary)' }}>
-                <div style={{ padding: '14px 18px', backgroundColor: 'rgba(0,122,255,0.12)', borderBottom: '1px solid var(--primary)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Box size={22} color="var(--primary)" />
-                  <div>
-                    <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--primary)' }}>BOX FOUND ✓</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{scannedBoxDetail.boxId} — {scannedBoxDetail.parts.length} part(s)</div>
-                  </div>
-                </div>
-                <div style={{ padding: '12px 16px', maxHeight: '40dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {scannedBoxDetail.parts.map((p, i) => (
-                    <div key={i} style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: '13px' }}>{p.partNumber}</div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{p.description}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '13px', color: 'var(--primary)' }}>Qty: {p.qty}</div>
-                        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--success)' }}>{p.binLocation || 'N/A'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
-                  <button onClick={() => { setScannedBoxDetail(null); }} className="btn" style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}>Cancel</button>
-                  <button onClick={() => handleManualReceiveBox(scannedBoxDetail.boxId)} className="btn btn-primary" style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}>✓ OK — Received</button>
-                </div>
-              </div>
-            </div>
-          )}
+
 
           {infoBox && (
             <div style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -916,6 +894,21 @@ const App = () => {
               <button onClick={() => { setAuditMode('box'); setSearchQuery(''); triggerFocus(); }} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', backgroundColor: auditMode === 'box' ? 'var(--bg-surface)' : 'transparent', color: auditMode === 'box' ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '11px' }}>1. BOXES</button>
               <button onClick={() => { setAuditMode('part'); setSearchQuery(''); triggerFocus(); }} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', backgroundColor: auditMode === 'part' ? 'var(--bg-surface)' : 'transparent', color: auditMode === 'part' ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '11px' }}>2. PARTS</button>
             </div>
+            
+            {auditMode === 'part' && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '0 4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={autoConfirmParts} 
+                    onChange={(e) => { setAutoConfirmParts(e.target.checked); triggerFocus(); }}
+                    style={{ accentColor: 'var(--primary)', width: '14px', height: '14px' }}
+                  />
+                  Auto-Confirm (No Popup)
+                </label>
+              </div>
+            )}
+            
             <Scanner 
               onScan={handleScan} 
               onChange={setSearchQuery}
@@ -926,16 +919,13 @@ const App = () => {
               setIsCameraOpenProp={setIsCameraOpen}
               inlineDetail={
                 scannedPartDetail ? { type: 'part', ...scannedPartDetail, boxId: getBoxId(scannedPartDetail) } :
-                scannedBoxDetail ? { type: 'box', ...scannedBoxDetail } :
                 null
               }
               onInlineOk={() => {
                 if (scannedPartDetail) handleManualReceivePart(scannedPartDetail.partNumber, getBoxId(scannedPartDetail));
-                else if (scannedBoxDetail) handleManualReceiveBox(scannedBoxDetail.boxId);
               }}
               onInlineCancel={() => {
                 setScannedPartDetail(null);
-                setScannedBoxDetail(null);
                 setIsCameraOpen(true);
               }}
             />
