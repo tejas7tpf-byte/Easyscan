@@ -77,7 +77,8 @@ const App = () => {
   }, [recentScan]);
   const [shipmentFilter, setShipmentFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState(''); 
-  const [selectedBox, setSelectedBox] = useState(null); 
+  const [selectedBox, setSelectedBox] = useState(null);
+  const [scannedPartDetail, setScannedPartDetail] = useState(null); // Popup modal for part scan 
   const [activeCartonFilter, setActiveCartonFilter] = useState(null);
   const [selectedUrgentPart, setSelectedUrgentPart] = useState(null); 
   const [focusTrigger, setFocusTrigger] = useState(0);
@@ -502,10 +503,11 @@ const App = () => {
       setScanTimestamps(prev => ({ ...prev, [key]: nowStr }));
       setRecentScan({ type: 'success', text: `Vrf: ${partNumber}` });
     }
+    setScannedPartDetail(null); // Close part detail popup
+    setSearchQuery('');
     triggerFocus();
     if (auditMode === 'part') {
-      setIsCameraOpen(true);
-      setSearchQuery('');
+      setIsCameraOpen(true); // Re-open camera for next scan
     }
   };
 
@@ -588,9 +590,9 @@ const App = () => {
       }
 
       if (matchingPart) {
-        setSearchQuery(matchingPart.partNumber); // Show part detail
-        setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
+        setScannedPartDetail(matchingPart); // Show popup modal with part detail
         setIsCameraOpen(false); // Close camera to let user press OK
+        setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
       } else {
         setRecentScan({ type: 'error', text: `No Match: ${q}` });
       }
@@ -780,6 +782,64 @@ const App = () => {
         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '10px', position: 'relative' }}>
           
           {/* Info Box Modal Pop-up */}
+          {/* Scanned Part Detail Modal (shows on camera scan match) */}
+          {scannedPartDetail && (
+            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <div className="card" style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--bg-surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '2px solid var(--success)' }}>
+                {/* Green Success Header */}
+                <div style={{ padding: '14px 18px', backgroundColor: 'rgba(52,199,89,0.15)', borderBottom: '1px solid var(--success)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckCircle2 size={22} color="var(--success)" />
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--success)' }}>PART FOUND</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Verify and press OK to confirm</div>
+                  </div>
+                </div>
+                {/* Part Details Body */}
+                <div style={{ padding: '18px' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.02em', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    {scannedPartDetail.partNumber}
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.4 }}>{scannedPartDetail.description || '—'}</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Qty</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)' }}>{scannedPartDetail.qty}</div>
+                    </div>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Bin Location</div>
+                      <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--success)' }}>{scannedPartDetail.binLocation || 'N/A'}</div>
+                    </div>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Invoice</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{scannedPartDetail.invoiceNumber || '—'}</div>
+                    </div>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Box/Carton</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{getBoxId(scannedPartDetail) || '—'}</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Footer: OK + Cancel */}
+                <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
+                  <button 
+                    onClick={() => { setScannedPartDetail(null); setIsCameraOpen(true); }}
+                    className="btn" 
+                    style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => handleManualReceivePart(scannedPartDetail.partNumber, getBoxId(scannedPartDetail))}
+                    className="btn btn-primary" 
+                    style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}
+                  >
+                    ✓ OK — Verified
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {infoBox && (
             <div style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
               <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '440px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
