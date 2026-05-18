@@ -5,6 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0, isCameraOpenProp, setIsCameraOpenProp }) => {
   const [inputValue, setInputValue] = useState(value);
   const [internalCameraOpen, setInternalCameraOpen] = useState(false);
+  const [digitalZoom, setDigitalZoom] = useState(1.0);
   
   const isCameraOpen = setIsCameraOpenProp ? isCameraOpenProp : internalCameraOpen;
   const setIsCameraOpen = setIsCameraOpenProp ? setIsCameraOpenProp : setInternalCameraOpen;
@@ -30,6 +31,7 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
     let timeoutId = null;
 
     if (isCameraOpen) {
+      setDigitalZoom(1.0); // Reset zoom
       // Small delay to ensure the DOM element 'reader' is fully painted
       timeoutId = setTimeout(() => {
         try {
@@ -37,8 +39,8 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
           
           const config = {
             fps: 10,
-            qrbox: { width: 280, height: 150 },
-            aspectRatio: 1.0
+            qrbox: { width: 250, height: 100 },
+            aspectRatio: 1.5 // Wide aspect ratio to save vertical space
           };
           
           html5QrCode.start(
@@ -66,19 +68,11 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
               // Ignore parse errors
             }
           ).then(() => {
-            // Attempt to apply hardware zoom AFTER camera successfully starts
-            try {
-              const track = html5QrCode.getRunningTrack();
-              if (track && track.getCapabilities && track.applyConstraints) {
-                const capabilities = track.getCapabilities();
-                if (capabilities.zoom) {
-                  track.applyConstraints({
-                    advanced: [{ zoom: Math.min(2.0, capabilities.zoom.max) }]
-                  }).catch(() => {});
-                }
-              }
-            } catch(e) {
-               console.warn("Hardware zoom not supported or failed", e);
+            // Apply initial CSS zoom
+            const videoObj = document.querySelector('#reader video');
+            if (videoObj) {
+              videoObj.style.transform = `scale(1.0)`;
+              videoObj.style.transformOrigin = 'center center';
             }
           }).catch((err) => {
             console.error("Camera start failed", err);
@@ -113,10 +107,19 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
     if (onChange) onChange(val);
   };
 
+  const handleZoomChange = (e) => {
+    const val = parseFloat(e.target.value);
+    setDigitalZoom(val);
+    const videoObj = document.querySelector('#reader video');
+    if (videoObj) {
+      videoObj.style.transform = `scale(${val})`;
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {isCameraOpen && (
-        <div style={{ backgroundColor: 'var(--bg-surface)', padding: '12px', borderRadius: '12px', border: '1px solid var(--primary)', marginBottom: '4px' }}>
+        <div className="animate-fade-in" style={{ backgroundColor: 'var(--bg-surface)', padding: '12px', borderRadius: '12px', border: '1px solid var(--primary)', marginBottom: '4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Camera size={14} /> LIVE SCANNER
@@ -129,7 +132,21 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
               <X size={16} />
             </button>
           </div>
-          <div id="reader" style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000' }}></div>
+          
+          <div id="reader" style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000', maxHeight: '35vh' }}></div>
+          
+          {/* Universal Zoom Slider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', padding: '0 8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>Zoom</span>
+            <input 
+              type="range" 
+              min="1.0" max="3.0" step="0.1" 
+              value={digitalZoom}
+              onChange={handleZoomChange}
+              style={{ flex: 1, accentColor: 'var(--primary)' }}
+            />
+            <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', minWidth: '30px' }}>{digitalZoom.toFixed(1)}x</span>
+          </div>
         </div>
       )}
 
@@ -156,11 +173,11 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
         </form>
 
         <button 
-          onClick={() => setIsCameraOpen(true)}
+          onClick={() => setIsCameraOpen(!isCameraOpen)}
           className="btn"
-          style={{ width: '64px', height: '64px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--primary)', padding: 0 }}
+          style={{ width: '64px', height: '64px', backgroundColor: isCameraOpen ? 'var(--primary)' : 'var(--bg-card)', border: '1px solid var(--border-color)', color: isCameraOpen ? '#FFF' : 'var(--primary)', padding: 0 }}
         >
-          <Camera size={28} />
+          {isCameraOpen ? <X size={28} /> : <Camera size={28} />}
         </button>
       </div>
 
