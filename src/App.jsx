@@ -8,6 +8,7 @@ import Login from './components/Login';
 import { parseExcelFile, processDataSources, parseMasterBackupExcel, parseExtranetWorkbook } from './utils/dataParser';
 import { exportToExcel, exportToPDF } from './utils/exporter';
 import { fetchLocationData, uploadLocationData, saveSupabaseScan, removeSupabaseScan, updateSupabaseSelectedInvoices } from './utils/supabaseService';
+import { playSuccessSound, playErrorSound } from './utils/soundPlayer';
 import { 
   CheckCircle2, 
   Circle, 
@@ -64,6 +65,16 @@ const App = () => {
   const [scanTimestamps, setScanTimestamps] = useState({});
   const [auditMode, setAuditMode] = useState('box'); 
   const [recentScan, setRecentScan] = useState(null);
+
+  useEffect(() => {
+    if (recentScan) {
+      if (recentScan.type === 'success') {
+        playSuccessSound();
+      } else if (recentScan.type === 'error') {
+        playErrorSound();
+      }
+    }
+  }, [recentScan]);
   const [shipmentFilter, setShipmentFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState(''); 
   const [selectedBox, setSelectedBox] = useState(null); 

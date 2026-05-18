@@ -21,6 +21,9 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
 
   useEffect(() => {
     let scanner = null;
+    let lastScannedText = '';
+    let lastScanTime = 0;
+
     if (isCameraOpen) {
       scanner = new Html5QrcodeScanner("reader", { 
         fps: 10, 
@@ -28,9 +31,22 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
         aspectRatio: 1.0
       });
       scanner.render((decodedText) => {
-        onScan(decodedText);
-        setIsCameraOpen(false);
-        scanner.clear();
+        const now = Date.now();
+        // Prevent duplicate scans within 2 seconds
+        if (decodedText !== lastScannedText || (now - lastScanTime) > 2000) {
+          lastScannedText = decodedText;
+          lastScanTime = now;
+          onScan(decodedText);
+          
+          // Flash the screen briefly to indicate scan
+          const readerElement = document.getElementById('reader');
+          if (readerElement) {
+            readerElement.style.opacity = '0.5';
+            setTimeout(() => {
+              if (readerElement) readerElement.style.opacity = '1';
+            }, 150);
+          }
+        }
       }, (error) => {
         // Handle scan error silently
       });
