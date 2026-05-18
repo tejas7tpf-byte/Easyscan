@@ -891,12 +891,12 @@ const App = () => {
                 </div>
 
                 {/* Modal Body (Parts List) */}
-                <div style={{ padding: '12px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                <div style={{ padding: '12px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, maxHeight: '60dvh' }}>
                   {safeParts.filter(p => getBoxId(p).toUpperCase() === infoBox.toUpperCase() && selectedInvoices.includes(p.invoiceNumber)).map((p, idx) => {
                     const isVerified = scannedParts.includes(getPartKey(p.partNumber, infoBox));
                     return (
                       <div key={idx} className="card" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: isVerified ? 'rgba(52, 199, 89, 0.05)' : 'var(--bg-card)', borderColor: isVerified ? 'var(--success)' : 'var(--border-color)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                           <div style={{ color: isVerified ? 'var(--success)' : 'var(--text-tertiary)', flexShrink: 0 }}>
                             {isVerified ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                           </div>
@@ -907,13 +907,47 @@ const App = () => {
                               <span style={{ fontSize: '9px', fontWeight: 700, backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', padding: '1px 5px', borderRadius: '4px', color: 'var(--text-secondary)' }}>Inv: {p.invoiceNumber}</span>
                             </div>
                             <p className="text-[11px] text-muted truncate" style={{ marginTop: '2px' }}>{p.description}</p>
+                            
+                            {/* Vehicle Number (Urgent details) */}
+                            {p.isUrgent && p.urgentDetails && p.urgentDetails.length > 0 && (
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                {p.urgentDetails.map((u, uidx) => (
+                                  <span key={uidx} style={{ fontSize: '9px', fontWeight: 800, backgroundColor: 'rgba(255,149,0,0.15)', color: 'var(--warning)', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                    <Car size={9} /> {u.vehicleNo} {u.model ? `(${u.model})` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
-                            <MapPin size={10} /> {p.binLocation || 'N/A'}
-                          </span>
-                          <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px', fontWeight: 600 }}>{isVerified ? 'Verified' : 'Pending'}</span>
+                        
+                        {/* Right Side: Bin Location & OK/Reset Buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
+                              <MapPin size={10} /> {p.binLocation || 'N/A'}
+                            </span>
+                            <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px', fontWeight: 600 }}>{isVerified ? 'Verified' : 'Pending'}</span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {!isVerified ? (
+                              <button 
+                                onClick={() => handleManualReceivePart(p.partNumber, infoBox)} 
+                                className="btn btn-primary btn-xs" 
+                                style={{ padding: '4px 10px', fontWeight: 800 }}
+                              >
+                                OK
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleUnreceivePart(p.partNumber, infoBox)} 
+                                style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
+                              >
+                                <RotateCcw size={16} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
