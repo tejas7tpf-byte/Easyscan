@@ -39,7 +39,6 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
           
           const config = {
             fps: 10,
-            qrbox: { width: 250, height: 100 },
             aspectRatio: 1.5 // Wide aspect ratio to save vertical space
           };
           
