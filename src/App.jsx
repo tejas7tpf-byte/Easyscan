@@ -924,6 +924,20 @@ const App = () => {
               focusTrigger={focusTrigger} 
               isCameraOpenProp={isCameraOpen}
               setIsCameraOpenProp={setIsCameraOpen}
+              inlineDetail={
+                scannedPartDetail ? { type: 'part', ...scannedPartDetail, boxId: getBoxId(scannedPartDetail) } :
+                scannedBoxDetail ? { type: 'box', ...scannedBoxDetail } :
+                null
+              }
+              onInlineOk={() => {
+                if (scannedPartDetail) handleManualReceivePart(scannedPartDetail.partNumber, getBoxId(scannedPartDetail));
+                else if (scannedBoxDetail) handleManualReceiveBox(scannedBoxDetail.boxId);
+              }}
+              onInlineCancel={() => {
+                setScannedPartDetail(null);
+                setScannedBoxDetail(null);
+                setIsCameraOpen(true);
+              }}
             />
             {recentScan && (
               <div className="card" style={{ borderLeft: `4px solid ${recentScan.type === 'success' ? 'var(--success)' : 'var(--danger)'}`, padding: '4px 8px' }}>

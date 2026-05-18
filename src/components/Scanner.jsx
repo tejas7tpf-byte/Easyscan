@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, X, Smartphone, Bluetooth, Keyboard, Search, Scan } from 'lucide-react';
+import { Camera, X, Smartphone, Bluetooth, Keyboard, Search, Scan, Box, CheckCircle2 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
-const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0, isCameraOpenProp, setIsCameraOpenProp }) => {
+const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier...", autoClear = true, focusTrigger = 0, isCameraOpenProp, setIsCameraOpenProp, inlineDetail, onInlineOk, onInlineCancel }) => {
   const [inputValue, setInputValue] = useState(value);
   const [internalCameraOpen, setInternalCameraOpen] = useState(false);
   const [digitalZoom, setDigitalZoom] = useState(1.0);
@@ -117,7 +117,73 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {isCameraOpen && (
+      {/* Inline Detail Card — shown in place of camera after a scan match */}
+      {inlineDetail && (
+        <div className="animate-fade-in" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: '12px', border: `2px solid ${inlineDetail.type === 'box' ? 'var(--primary)' : 'var(--success)'}`, overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ padding: '12px 16px', backgroundColor: inlineDetail.type === 'box' ? 'rgba(0,122,255,0.12)' : 'rgba(52,199,89,0.12)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {inlineDetail.type === 'box'
+              ? <Box size={20} color="var(--primary)" />
+              : <CheckCircle2 size={20} color="var(--success)" />}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 900, fontSize: '13px', color: inlineDetail.type === 'box' ? 'var(--primary)' : 'var(--success)' }}>
+                {inlineDetail.type === 'box' ? `BOX FOUND ✓ — ${inlineDetail.boxId}` : 'PART FOUND ✓'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Press OK to confirm</div>
+            </div>
+          </div>
+          {/* Body */}
+          <div style={{ padding: '12px 16px' }}>
+            {inlineDetail.type === 'part' ? (
+              <>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '6px' }}>{inlineDetail.partNumber}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>{inlineDetail.description || '—'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Qty</div>
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)' }}>{inlineDetail.qty}</div>
+                  </div>
+                  <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Bin Location</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--success)' }}>{inlineDetail.binLocation || 'N/A'}</div>
+                  </div>
+                  <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Invoice</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{inlineDetail.invoiceNumber || '—'}</div>
+                  </div>
+                  <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Box/Carton</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{inlineDetail.boxId || '—'}</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '30vh', overflowY: 'auto' }}>
+                {(inlineDetail.parts || []).map((p, i) => (
+                  <div key={i} style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '12px' }}>{p.partNumber}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{p.description}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 900, fontSize: '12px', color: 'var(--primary)' }}>Qty: {p.qty}</div>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--success)' }}>{p.binLocation || 'N/A'}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Footer */}
+          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
+            <button onClick={onInlineCancel} className="btn" style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700, padding: '10px' }}>Cancel</button>
+            <button onClick={onInlineOk} className="btn btn-primary" style={{ flex: 2, fontSize: '15px', fontWeight: 900, padding: '12px' }}>✓ OK — Confirmed</button>
+          </div>
+        </div>
+      )}
+
+      {/* Camera view — hidden when inlineDetail is showing */}
+      {isCameraOpen && !inlineDetail && (
         <div className="animate-fade-in" style={{ backgroundColor: 'var(--bg-surface)', padding: '12px', borderRadius: '12px', border: '1px solid var(--primary)', marginBottom: '4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
