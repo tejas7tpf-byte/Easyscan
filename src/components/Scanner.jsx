@@ -27,8 +27,10 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
     if (isCameraOpen) {
       scanner = new Html5QrcodeScanner("reader", { 
         fps: 10, 
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0
+        qrbox: { width: 280, height: 150 }, // Wider box is better for 1D barcodes and feels zoomed
+        aspectRatio: 1.0,
+        videoConstraints: { facingMode: "environment" }, // Force back camera
+        rememberLastUsedCamera: true
       });
       scanner.render((decodedText) => {
         const now = Date.now();
@@ -75,25 +77,20 @@ const Scanner = ({ onScan, onChange, value = '', placeholder = "Scan identifier.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {isCameraOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: '20px'
-        }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '400px', backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Scan Barcode/QR</h3>
-              <button 
-                onClick={() => setIsCameraOpen(false)}
-                className="btn btn-xs"
-                style={{ backgroundColor: 'rgba(255,59,48,0.1)', color: 'var(--danger)', padding: '6px' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div id="reader" style={{ width: '100%', borderRadius: '8px', overflow: 'hidden' }}></div>
+        <div style={{ backgroundColor: 'var(--bg-surface)', padding: '12px', borderRadius: '12px', border: '1px solid var(--primary)', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Camera size={14} /> LIVE SCANNER
+            </span>
+            <button 
+              onClick={() => setIsCameraOpen(false)}
+              className="btn btn-xs"
+              style={{ backgroundColor: 'rgba(255,59,48,0.1)', color: 'var(--danger)', padding: '4px' }}
+            >
+              <X size={16} />
+            </button>
           </div>
+          <div id="reader" style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000' }}></div>
         </div>
       )}
 

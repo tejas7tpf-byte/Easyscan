@@ -32,16 +32,21 @@ export const playErrorSound = () => {
     
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(300, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.15);
+    osc.frequency.setValueAtTime(300, ctx.currentTime + 0.2);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.35);
     
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
-    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.02);
+    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+    gainNode.gain.setValueAtTime(0, ctx.currentTime + 0.18);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.2);
+    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.35);
     
     osc.connect(gainNode);
     gainNode.connect(ctx.destination);
     
     osc.start();
-    osc.stop(ctx.currentTime + 0.35);
+    osc.stop(ctx.currentTime + 0.4);
   } catch(e) { console.error("Sound error:", e); }
 };
