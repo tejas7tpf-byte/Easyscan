@@ -78,7 +78,8 @@ const App = () => {
   const [shipmentFilter, setShipmentFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState(''); 
   const [selectedBox, setSelectedBox] = useState(null);
-  const [scannedPartDetail, setScannedPartDetail] = useState(null); // Popup modal for part scan 
+  const [scannedPartDetail, setScannedPartDetail] = useState(null);
+  const [scannedBoxDetail, setScannedBoxDetail] = useState(null); 
   const [activeCartonFilter, setActiveCartonFilter] = useState(null);
   const [selectedUrgentPart, setSelectedUrgentPart] = useState(null); 
   const [focusTrigger, setFocusTrigger] = useState(0);
@@ -478,6 +479,7 @@ const App = () => {
       saveSupabaseScan(currentLocation, q, 'box', currentUser);
       setRecentScan({ type: 'success', text: `Rcvd: ${q}` });
     }
+    setScannedBoxDetail(null);
     triggerFocus();
   };
 
@@ -559,9 +561,10 @@ const App = () => {
       }
       const isBox = parts.some(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
       if (isBox) {
-        setReceivedBoxes(prev => [...prev, q]);
-        saveSupabaseScan(currentLocation, q, 'box', currentUser);
-        setRecentScan({ type: 'success', text: `Rcvd: ${q}` });
+        // Show box detail popup instead of immediately confirming
+        const boxParts = parts.filter(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
+        setScannedBoxDetail({ boxId: q, parts: boxParts });
+        setRecentScan({ type: 'success', text: `Box Found: ${q}` });
       } else {
         setRecentScan({ type: 'error', text: `No ID: ${q}` });
       }
@@ -784,30 +787,26 @@ const App = () => {
           {/* Info Box Modal Pop-up */}
           {/* Scanned Part Detail Modal (shows on camera scan match) */}
           {scannedPartDetail && (
-            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5dvh 16px 16px', overflowY: 'auto' }}>
               <div className="card" style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--bg-surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '2px solid var(--success)' }}>
-                {/* Green Success Header */}
                 <div style={{ padding: '14px 18px', backgroundColor: 'rgba(52,199,89,0.15)', borderBottom: '1px solid var(--success)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <CheckCircle2 size={22} color="var(--success)" />
                   <div>
-                    <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--success)' }}>PART FOUND</div>
+                    <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--success)' }}>PART FOUND ✓</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Verify and press OK to confirm</div>
                   </div>
                 </div>
-                {/* Part Details Body */}
                 <div style={{ padding: '18px' }}>
-                  <div style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.02em', color: 'var(--text-primary)', marginBottom: '12px' }}>
-                    {scannedPartDetail.partNumber}
-                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.02em', color: 'var(--text-primary)', marginBottom: '8px' }}>{scannedPartDetail.partNumber}</div>
                   <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.4 }}>{scannedPartDetail.description || '—'}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Qty</div>
-                      <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)' }}>{scannedPartDetail.qty}</div>
+                      <div style={{ fontSize: '20px', fontWeight: 900, color: 'var(--primary)' }}>{scannedPartDetail.qty}</div>
                     </div>
                     <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Bin Location</div>
-                      <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--success)' }}>{scannedPartDetail.binLocation || 'N/A'}</div>
+                      <div style={{ fontSize: '18px', fontWeight: 900, color: 'var(--success)' }}>{scannedPartDetail.binLocation || 'N/A'}</div>
                     </div>
                     <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Invoice</div>
@@ -819,22 +818,42 @@ const App = () => {
                     </div>
                   </div>
                 </div>
-                {/* Footer: OK + Cancel */}
                 <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
-                  <button 
-                    onClick={() => { setScannedPartDetail(null); setIsCameraOpen(true); }}
-                    className="btn" 
-                    style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={() => handleManualReceivePart(scannedPartDetail.partNumber, getBoxId(scannedPartDetail))}
-                    className="btn btn-primary" 
-                    style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}
-                  >
-                    ✓ OK — Verified
-                  </button>
+                  <button onClick={() => { setScannedPartDetail(null); setIsCameraOpen(true); }} className="btn" style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}>Cancel</button>
+                  <button onClick={() => handleManualReceivePart(scannedPartDetail.partNumber, getBoxId(scannedPartDetail))} className="btn btn-primary" style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}>✓ OK — Verified</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Scanned Box Detail Modal */}
+          {scannedBoxDetail && (
+            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5dvh 16px 16px', overflowY: 'auto' }}>
+              <div className="card" style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--bg-surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '2px solid var(--primary)' }}>
+                <div style={{ padding: '14px 18px', backgroundColor: 'rgba(0,122,255,0.12)', borderBottom: '1px solid var(--primary)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Box size={22} color="var(--primary)" />
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--primary)' }}>BOX FOUND ✓</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{scannedBoxDetail.boxId} — {scannedBoxDetail.parts.length} part(s)</div>
+                  </div>
+                </div>
+                <div style={{ padding: '12px 16px', maxHeight: '40dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {scannedBoxDetail.parts.map((p, i) => (
+                    <div key={i} style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '13px' }}>{p.partNumber}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{p.description}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 900, fontSize: '13px', color: 'var(--primary)' }}>Qty: {p.qty}</div>
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--success)' }}>{p.binLocation || 'N/A'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
+                  <button onClick={() => { setScannedBoxDetail(null); }} className="btn" style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}>Cancel</button>
+                  <button onClick={() => handleManualReceiveBox(scannedBoxDetail.boxId)} className="btn btn-primary" style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}>✓ OK — Received</button>
                 </div>
               </div>
             </div>
