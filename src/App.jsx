@@ -595,11 +595,8 @@ const App = () => {
       }
       const isBox = parts.some(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
       if (isBox) {
-        // Show box detail popup and close camera
-        const boxParts = parts.filter(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
-        setScannedBoxDetail({ boxId: q, parts: boxParts });
-        setIsCameraOpen(false);
-        setRecentScan({ type: 'success', text: `Box Found: ${q}` });
+        // Auto-receive the box instead of showing popup
+        handleManualReceiveBox(q);
       } else {
         setRecentScan({ type: 'error', text: `No ID: ${q}` });
       }
@@ -607,10 +604,8 @@ const App = () => {
       const eligibleCartons = [...new Set(parts.filter(p => selectedInvoices.includes(p.invoiceNumber)).map(p => getBoxId(p).toUpperCase()))];
       const exactCartonMatch = eligibleCartons.find(c => c === q);
       if (exactCartonMatch) {
-        setInfoBox(exactCartonMatch);
-        setIsCameraOpen(false);
-        setSearchQuery(''); 
-        setRecentScan({ type: 'success', text: `Opened Carton: ${exactCartonMatch}` });
+        setActiveCartonFilter(exactCartonMatch);
+        setRecentScan({ type: 'success', text: `Filtered Carton: ${exactCartonMatch}` });
         return;
       }
 
@@ -900,91 +895,7 @@ const App = () => {
             </div>
           )}
 
-          {infoBox && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-              <div className="card animate-fade-in" style={{ width: '100%', maxWidth: '440px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-color)', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
-                {/* Modal Header */}
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-card)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Box size={18} className="text-primary" />
-                    <h3 className="font-bold text-sm">Box Contents: {infoBox}</h3>
-                  </div>
-                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
-                    <X size={18} />
-                  </button>
-                </div>
 
-                {/* Modal Body (Parts List) */}
-                <div style={{ padding: '12px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, maxHeight: '60dvh' }}>
-                  {safeParts.filter(p => getBoxId(p).toUpperCase() === infoBox.toUpperCase() && selectedInvoices.includes(p.invoiceNumber)).map((p, idx) => {
-                    const isVerified = scannedParts.includes(getPartKey(p.partNumber, infoBox));
-                    return (
-                      <div key={idx} className="card" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: isVerified ? 'rgba(52, 199, 89, 0.05)' : 'var(--bg-card)', borderColor: isVerified ? 'var(--success)' : 'var(--border-color)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                          <div style={{ color: isVerified ? 'var(--success)' : 'var(--text-tertiary)', flexShrink: 0 }}>
-                            {isVerified ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                              <span className="font-bold text-xs">{p.partNumber}</span>
-                              <span style={{ fontSize: '9px', fontWeight: 800, backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', padding: '1px 5px', borderRadius: '4px' }}>Qty: {p.qty}</span>
-                              <span style={{ fontSize: '9px', fontWeight: 700, backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', padding: '1px 5px', borderRadius: '4px', color: 'var(--text-secondary)' }}>Inv: {p.invoiceNumber}</span>
-                            </div>
-                            <p className="text-[11px] text-muted truncate" style={{ marginTop: '2px' }}>{p.description}</p>
-                            
-                            {/* Vehicle Number (Urgent details) */}
-                            {p.isUrgent && p.urgentDetails && p.urgentDetails.length > 0 && (
-                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                {p.urgentDetails.map((u, uidx) => (
-                                  <span key={uidx} style={{ fontSize: '9px', fontWeight: 800, backgroundColor: 'rgba(255,149,0,0.15)', color: 'var(--warning)', padding: '1px 5px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                                    <Car size={9} /> {u.vehicleNo} {u.model ? `(${u.model})` : ''}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Right Side: Bin Location & OK/Reset Buttons */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                          <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
-                              <MapPin size={10} /> {p.binLocation || 'N/A'}
-                            </span>
-                            <span style={{ fontSize: '9px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px', fontWeight: 600 }}>{isVerified ? 'Verified' : 'Pending'}</span>
-                          </div>
-                          
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            {!isVerified ? (
-                              <button 
-                                onClick={() => handleManualReceivePart(p.partNumber, infoBox)} 
-                                className="btn btn-primary btn-xs" 
-                                style={{ padding: '4px 10px', fontWeight: 800 }}
-                              >
-                                OK
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => handleUnreceivePart(p.partNumber, infoBox)} 
-                                style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
-                              >
-                                <RotateCcw size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Modal Footer */}
-                <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', backgroundColor: 'var(--bg-card)', borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px' }}>
-                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} className="btn btn-primary btn-sm" style={{ padding: '6px 16px', fontWeight: 700 }}>Close</button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
             <div style={{ display: 'flex', backgroundColor: 'var(--bg-card)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border-color)' }}>
