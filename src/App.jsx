@@ -90,6 +90,22 @@ const App = () => {
   const [autoConfirmParts, setAutoConfirmParts] = useState(() => {
     return localStorage.getItem('easyscan_autoconfirm_parts') === 'true';
   });
+  const [selectedPartsForReceive, setSelectedPartsForReceive] = useState([]);
+  // New state to hold remarks per part (key: partNumber|boxId)
+  const [partRemarks, setPartRemarks] = useState(() => {
+    // Determine location without relying on currentLocation (which is defined later)
+    const loc = localStorage.getItem('easyscan_current_loc_v29') || 'vastral';
+    const saved = localStorage.getItem('easyscan_part_remarks_v29_' + loc);
+    return saved ? JSON.parse(saved) : {};
+  });
+  // Persist remarks per location (use currentLocation if available, otherwise fallback)
+  // New state to control remark visibility per part
+const [showRemarkFor, setShowRemarkFor] = useState({});
+// Persist remarks per location (use fallback to avoid early reference)
+  useEffect(() => {
+    const loc = localStorage.getItem('easyscan_current_loc_v29') || 'vastral';
+    localStorage.setItem('easyscan_part_remarks_v29_' + loc, JSON.stringify(partRemarks));
+  }, [partRemarks]);
 
   useEffect(() => {
     localStorage.setItem('easyscan_autoconfirm_parts', autoConfirmParts);
@@ -697,6 +713,16 @@ const App = () => {
     return { progress: totalPartsCount > 0 ? (scannedPartsCount / totalPartsCount) * 100 : 0, totalPartsCount, scannedPartsCount };
   }, [selectedInvoices, safeParts, scannedParts]);
 
+  const visiblePendingParts = useMemo(() => {
+    if (auditMode !== 'part') return [];
+    return pendingPartsToAudit.filter(p => { 
+      const q = searchQuery.toUpperCase(); 
+      const isReceived = scannedParts.includes(getPartKey(p.partNumber, getBoxId(p)));
+      if (isReceived) return false;
+      return String(p.partNumber||'').toUpperCase().includes(q) || String(p.description||'').toUpperCase().includes(q) || getBoxId(p).toUpperCase().includes(q); 
+    });
+  }, [auditMode, pendingPartsToAudit, searchQuery, scannedParts]);
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -852,6 +878,20 @@ const App = () => {
                       <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>Box/Carton</div>
                       <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{getBoxId(scannedPartDetail) || '—'}</div>
                     </div>
+                    {/* Remark display/edit in modal */}
+                    <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="Remark (shortage, discrepancy…)"
+                        value={partRemarks[getPartKey(scannedPartDetail.partNumber, getBoxId(scannedPartDetail))] || ''}
+                        onChange={(e) => {
+                          const key = getPartKey(scannedPartDetail.partNumber, getBoxId(scannedPartDetail));
+                          setPartRemarks((prev) => ({ ...prev, [key]: e.target.value }));
+                        }}
+                        className="input input-sm"
+                        style={{ width: '100%', fontSize: '10px', padding: '4px 8px' }}
+                      />
+                    </div>
                   </div>
                 </div>
                 <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
@@ -946,9 +986,42 @@ const App = () => {
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider">
-                {auditMode === 'box' ? `Pending (${allPendingBoxes.length})` : `Checklist (${pendingPartsToAudit.filter(p => !scannedParts.includes(getPartKey(p.partNumber, getBoxId(p)))).length})`}
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                  {auditMode === 'box' ? `Pending (${allPendingBoxes.length})` : `Checklist (${pendingPartsToAudit.filter(p => !scannedParts.includes(getPartKey(p.partNumber, getBoxId(p)))).length})`}
+                </h3>
+                {auditMode === 'part' && searchQuery && visiblePendingParts.length > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 800, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedPartsForReceive.length === visiblePendingParts.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPartsForReceive(visiblePendingParts.map(p => getPartKey(p.partNumber, getBoxId(p))));
+                          } else {
+                            setSelectedPartsForReceive([]);
+                          }
+                        }}
+                      /> All
+                    </label>
+                    <button 
+                      onClick={() => {
+                        const partsToReceive = selectedPartsForReceive.length > 0 
+                          ? visiblePendingParts.filter(p => selectedPartsForReceive.includes(getPartKey(p.partNumber, getBoxId(p))))
+                          : visiblePendingParts;
+                        
+                        partsToReceive.forEach(p => handleManualReceivePart(p.partNumber, getBoxId(p)));
+                        setSelectedPartsForReceive([]);
+                      }} 
+                      className="btn btn-primary btn-xs animate-fade-in" 
+                      style={{ padding: '2px 8px', fontSize: '10px', fontWeight: 800 }}
+                    >
+                      {selectedPartsForReceive.length > 0 ? `Receive Selected (${selectedPartsForReceive.length}) OK` : `Receive All ${visiblePendingParts.length} OK`}
+                    </button>
+                  </div>
+                )}
+              </div>
               {auditMode === 'part' && activeCartonFilter && (
                 <button onClick={() => { setActiveCartonFilter(null); triggerFocus(); }} style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 800, cursor: 'pointer' }}>
                   <Filter size={10} /> {activeCartonFilter} <X size={10} />
@@ -1007,7 +1080,24 @@ const App = () => {
                 const isReceived = scannedParts.includes(getPartKey(p.partNumber, boxId));
                 return (
                   <div key={i} className="card" style={{ display: 'flex', gap: '8px', padding: '6px 8px', opacity: isReceived ? 0.5 : 1, borderColor: isReceived ? 'var(--success)' : 'var(--border-color)' }}>
-                    <div style={{ color: isReceived ? 'var(--success)' : 'var(--text-tertiary)', marginTop: '2px' }}>{isReceived ? <CheckCircle2 size={16} /> : <Circle size={16} />}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                      {/* Tick icon removed to avoid confusion with checkbox */}
+                      {!isReceived && (
+                        <input 
+                          type="checkbox" 
+                          style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                          checked={selectedPartsForReceive.includes(getPartKey(p.partNumber, boxId))}
+                          onChange={(e) => {
+                            const key = getPartKey(p.partNumber, boxId);
+                            if (e.target.checked) {
+                              setSelectedPartsForReceive(prev => [...prev, key]);
+                            } else {
+                              setSelectedPartsForReceive(prev => prev.filter(k => k !== key));
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1021,19 +1111,41 @@ const App = () => {
                         </div>
                       </div>
                       <p className="text-muted truncate" style={{ marginTop: '1px', fontWeight: 500, fontSize: '10px' }}>{p.description}</p>
+                      
                       <div style={{ display: 'flex', gap: '8px', marginTop: '3px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}><FileText size={8}/> {p.invoiceNumber}</span>
                         <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}><Box size={8}/> {boxId}</span>
                         {p.isUrgent && p.urgentDetails && p.urgentDetails.length > 0 && (
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                             {p.urgentDetails.map((u, uidx) => (
-                              <span key={uidx} style={{ fontSize: '10px', fontWeight: 800, backgroundColor: 'rgba(255,149,0,0.15)', color: 'var(--warning)', padding: '1px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <span key={uidx} style={{ fontSize: '10px', fontWeight: 900, backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', padding: '1px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }}>
                                 <Car size={10} /> {u.vehicleNo} {u.model ? `(${u.model})` : ''} {u.qty ? `[Qty: ${u.qty}]` : ''}
                               </span>
                             ))}
                           </div>
                         )}
-                      </div>
+                        {/* Remark input toggle */}
+                        {showRemarkFor[getPartKey(p.partNumber, boxId)] ? (
+                          <input
+                            type="text"
+                            placeholder="Remark (shortage, discrepancy…)"
+                            value={partRemarks[getPartKey(p.partNumber, boxId)] || ''}
+                            onChange={(e) => {
+                              const key = getPartKey(p.partNumber, boxId);
+                              setPartRemarks(prev => ({ ...prev, [key]: e.target.value }));
+                            }}
+                            className="input input-sm"
+                            style={{ marginTop: '4px', width: '100%', fontSize: '10px', padding: '4px 8px' }}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setShowRemarkFor(prev => ({ ...prev, [getPartKey(p.partNumber, boxId)]: true }))}
+                            className="btn btn-sm"
+                            style={{ marginTop: '4px', fontSize: '10px', padding: '2px 8px' }}
+                          >+ Remark</button>
+                        )}
+
+                      </div>                   
                     </div>
                   </div>
                 );
@@ -1050,7 +1162,7 @@ const App = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <button 
                 onClick={async () => {
-                  await exportToExcel(safeParts, safeShipments, scannedParts, selectedInvoices, scanTimestamps);
+                  await exportToExcel(safeParts, safeShipments, scannedParts, selectedInvoices, scanTimestamps, partRemarks);
                   setRecentScan({ type: 'success', text: 'Excel Saved to Downloads' });
                 }}
                 className="btn btn-primary" 
@@ -1060,7 +1172,7 @@ const App = () => {
               </button>
               <button 
                 onClick={() => {
-                  exportToPDF(safeParts, safeShipments, scannedParts, selectedInvoices, scanTimestamps);
+                  exportToPDF(safeParts, safeShipments, scannedParts, selectedInvoices, scanTimestamps, partRemarks);
                   setRecentScan({ type: 'success', text: 'PDF Saved to Downloads' });
                 }}
                 className="btn" 

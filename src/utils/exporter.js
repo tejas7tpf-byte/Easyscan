@@ -34,7 +34,7 @@ const getFileName = (shipments, selectedInvoices, extension) => {
 /**
  * Generates an Excel report
  */
-export const exportToExcel = async (parts, shipments, scannedParts, selectedInvoices, scanTimestamps = {}) => {
+export const exportToExcel = async (parts, shipments, scannedParts, selectedInvoices, scanTimestamps = {}, partRemarks = {}) => {
   try {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Audit Report');
@@ -50,7 +50,8 @@ export const exportToExcel = async (parts, shipments, scannedParts, selectedInvo
       { header: 'Qty', key: 'qty', width: 8 },
       { header: 'Status', key: 'status', width: 12 },
       { header: 'Receive Date & Time', key: 'receiveDate', width: 22 },
-      { header: 'Urgent Vehicle Details', key: 'urgent', width: 40 }
+      { header: 'Urgent Vehicle Details', key: 'urgent', width: 40 },
+      { header: 'Remark', key: 'remark', width: 30 }
     ];
 
     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -76,7 +77,8 @@ export const exportToExcel = async (parts, shipments, scannedParts, selectedInvo
         qty: p.qty,
         status: isReceived ? 'RECEIVED' : 'PENDING',
         receiveDate: receiveDate,
-        urgent: (p.urgentDetails || []).map(v => `${v.vehicleNo} (${v.model})`).join(', ')
+        urgent: (p.urgentDetails || []).map(v => `${v.vehicleNo} (${v.model})`).join(', '),
+        remark: partRemarks[key] || ''
       });
 
       if (isReceived) {
@@ -107,7 +109,7 @@ export const exportToExcel = async (parts, shipments, scannedParts, selectedInvo
 /**
  * Generates a PDF report
  */
-export const exportToPDF = (parts, shipments, scannedParts, selectedInvoices, scanTimestamps = {}) => {
+export const exportToPDF = (parts, shipments, scannedParts, selectedInvoices, scanTimestamps = {}, partRemarks = {}) => {
   try {
     const doc = new jsPDF('l', 'mm', 'a4');
     
@@ -137,13 +139,14 @@ export const exportToPDF = (parts, shipments, scannedParts, selectedInvoices, sc
         p.qty,
         isReceived ? 'RECEIVED' : 'PENDING',
         receiveDate,
-        (p.urgentDetails || []).map(v => v.vehicleNo).join(', ')
+        (p.urgentDetails || []).map(v => v.vehicleNo).join(', '),
+        partRemarks[`${String(p.partNumber).trim().toUpperCase()}||${boxId.toUpperCase()}`] || ''
       ];
     });
 
     autoTable(doc, {
       startY: 35,
-      head: [['Transporter', 'Invoice', 'Carton', 'Part No', 'Description', 'Qty', 'Status', 'Receive Date & Time', 'Vehicles']],
+      head: [['Transporter', 'Invoice', 'Carton', 'Part No', 'Description', 'Qty', 'Status', 'Receive Date & Time', 'Vehicles', 'Remark']],
       body: tableData,
       theme: 'striped',
       headStyles: { fillColor: [0, 122, 255] },
