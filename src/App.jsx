@@ -93,15 +93,19 @@ const App = () => {
   const [selectedPartsForReceive, setSelectedPartsForReceive] = useState([]);
   // New state to hold remarks per part (key: partNumber|boxId)
   const [partRemarks, setPartRemarks] = useState(() => {
-    // Determine location without relying on currentLocation (which is defined later)
-    const loc = localStorage.getItem('easyscan_current_loc_v29') || 'vastral';
-    const saved = localStorage.getItem('easyscan_part_remarks_v29_' + loc);
-    return saved ? JSON.parse(saved) : {};
+    try {
+      const loc = localStorage.getItem('easyscan_current_loc_v29') || 'vastral';
+      const saved = localStorage.getItem('easyscan_part_remarks_v29_' + loc);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error(e);
+      return {};
+    }
   });
   // Persist remarks per location (use currentLocation if available, otherwise fallback)
   // New state to control remark visibility per part
-const [showRemarkFor, setShowRemarkFor] = useState({});
-// Persist remarks per location (use fallback to avoid early reference)
+  const [showRemarkFor, setShowRemarkFor] = useState({});
+
   useEffect(() => {
     const loc = localStorage.getItem('easyscan_current_loc_v29') || 'vastral';
     localStorage.setItem('easyscan_part_remarks_v29_' + loc, JSON.stringify(partRemarks));
@@ -112,18 +116,30 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
   }, [autoConfirmParts]);
 
   const [locations, setLocations] = useState(() => {
-    const saved = localStorage.getItem('easyscan_locations_v29');
-    return saved ? JSON.parse(saved) : DEFAULT_LOCATIONS;
+    try {
+      const saved = localStorage.getItem('easyscan_locations_v29');
+      return saved ? JSON.parse(saved) : DEFAULT_LOCATIONS;
+    } catch (e) {
+      return DEFAULT_LOCATIONS;
+    }
   });
 
   const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem('easyscan_users_v29');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    try {
+      const saved = localStorage.getItem('easyscan_users_v29');
+      return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    } catch (e) {
+      return DEFAULT_USERS;
+    }
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('easyscan_current_user_v29');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('easyscan_current_user_v29');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
   });
 
   const [currentLocation, setCurrentLocation] = useState(() => {
@@ -146,14 +162,15 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
   useEffect(() => {
     if (!infoBox) return;
     const partsList = data?.parts || [];
+    const infoBoxStr = String(infoBox).toUpperCase();
     const boxParts = partsList.filter(p => 
       selectedInvoices.includes(p.invoiceNumber) && 
-      getBoxId(p).toUpperCase() === infoBox.toUpperCase()
+      getBoxId(p).toUpperCase() === infoBoxStr
     );
     if (boxParts.length === 0) return;
     
     const allVerified = boxParts.every(p => 
-      scannedParts.includes(getPartKey(p.partNumber, infoBox))
+      scannedParts.includes(getPartKey(p.partNumber, String(infoBox)))
     );
     
     if (allVerified) {
@@ -581,6 +598,23 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
     triggerFocus();
   };
 
+  const safeShipments = data?.shipments || [];
+  const safeParts = data?.parts || [];
+  const activeShipments = safeShipments.filter(s => selectedInvoices.includes(s.invoiceNo));
+  
+  const totalBoxesInSelection = useMemo(() => {
+    return activeShipments.reduce((acc, s) => acc + (s.totalBoxes || 0), 0);
+  }, [activeShipments]);
+
+  const allPendingBoxes = useMemo(() => {
+    const boxes = [];
+    activeShipments.forEach(s => (s.boxes || []).forEach(b => { 
+      const bNorm = String(b || '').trim().toUpperCase();
+      if (b && !receivedBoxes.includes(bNorm)) boxes.push(b); 
+    }));
+    return [...new Set(boxes)];
+  }, [activeShipments, receivedBoxes]);
+
   const handleShipmentScan = useCallback((query) => {
     const q = String(query || '').trim().toLowerCase();
     const shipments = data?.shipments || [];
@@ -609,12 +643,26 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
         setRecentScan({ type: 'error', text: `Dpl: ${q}` });
         return;
       }
+      
+      // Match directly against the pending boxes list (case-insensitive)
+      const foundInPending = allPendingBoxes.find(b => String(b).trim().toUpperCase() === q);
+      if (foundInPending) {
+        handleManualReceiveBox(foundInPending);
+        return;
+      }
+
+      // Check if it exists in parts list for selected invoices
       const isBox = parts.some(p => selectedInvoices.includes(p.invoiceNumber) && (String(p.containerNo || '').toUpperCase() === q || String(p.shipLPNo || '').toUpperCase() === q));
       if (isBox) {
-        // Auto-receive the box instead of showing popup
         handleManualReceiveBox(q);
       } else {
-        setRecentScan({ type: 'error', text: `No ID: ${q}` });
+        // Try any box from active shipments
+        const anyPendingBox = activeShipments.some(s => (s.boxes || []).some(b => String(b).trim().toUpperCase() === q));
+        if (anyPendingBox) {
+          handleManualReceiveBox(q);
+        } else {
+          setRecentScan({ type: 'error', text: `No ID: ${q}` });
+        }
       }
     } else {
       const eligibleCartons = [...new Set(parts.filter(p => selectedInvoices.includes(p.invoiceNumber)).map(p => getBoxId(p).toUpperCase()))];
@@ -652,28 +700,22 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
         setRecentScan({ type: 'error', text: `No Match: ${q}` });
       }
     }
-  }, [auditMode, selectedInvoices, receivedBoxes, data, activeCartonFilter, scannedParts, autoConfirmParts]);
+  }, [auditMode, selectedInvoices, receivedBoxes, data, activeCartonFilter, scannedParts, autoConfirmParts, allPendingBoxes, activeShipments]);
 
-  const safeShipments = data?.shipments || [];
-  const safeParts = data?.parts || [];
-  const activeShipments = safeShipments.filter(s => selectedInvoices.includes(s.invoiceNo));
-  
-  const totalBoxesInSelection = useMemo(() => {
-    return activeShipments.reduce((acc, s) => acc + (s.totalBoxes || 0), 0);
-  }, [activeShipments]);
 
-  const allPendingBoxes = useMemo(() => {
-    const boxes = [];
-    activeShipments.forEach(s => (s.boxes || []).forEach(b => { 
-      const bNorm = String(b || '').trim().toUpperCase();
-      if (b && !receivedBoxes.includes(bNorm)) boxes.push(b); 
-    }));
-    return [...new Set(boxes)];
-  }, [activeShipments, receivedBoxes]);
 
   const allReceivedBoxes = useMemo(() => {
     return receivedBoxes.filter(b => activeShipments.some(s => (s.boxes || []).some(sb => String(sb || '').trim().toUpperCase() === b)));
   }, [activeShipments, receivedBoxes]);
+
+  const infoBoxParts = useMemo(() => {
+    if (!infoBox) return [];
+    const infoBoxStr = String(infoBox).toUpperCase();
+    return safeParts.filter(p => 
+      selectedInvoices.includes(p.invoiceNumber) && 
+      getBoxId(p).toUpperCase() === infoBoxStr
+    );
+  }, [infoBox, safeParts, selectedInvoices]);
 
   const pendingPartsToAudit = useMemo(() => {
     let eligible = safeParts.filter(p => {
@@ -930,6 +972,48 @@ const [showRemarkFor, setShowRemarkFor] = useState({});
                 <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
                   <button onClick={() => { setScannedBoxDetail(null); setIsCameraOpen(true); }} className="btn" style={{ flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontWeight: 700 }}>Cancel</button>
                   <button onClick={() => handleManualReceiveBox(scannedBoxDetail.boxId)} className="btn btn-primary" style={{ flex: 2, fontSize: '16px', fontWeight: 900, padding: '14px' }}>✓ OK — Received</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info Box Details Modal */}
+          {infoBox && (
+            <div className="animate-fade-in" style={{ position: 'fixed', inset: 0, zIndex: 999999, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5dvh 16px 16px', overflowY: 'auto' }}>
+              <div className="card" style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--bg-surface)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '2px solid var(--primary)' }}>
+                <div style={{ padding: '14px 18px', backgroundColor: 'rgba(0,122,255,0.12)', borderBottom: '1px solid var(--primary)', borderTopLeftRadius: '10px', borderTopRightRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Info size={22} color="var(--primary)" />
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--primary)' }}>BOX DETAILS</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{String(infoBox)} — {infoBoxParts.length} parts</div>
+                    </div>
+                  </div>
+                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
+                </div>
+                <div style={{ padding: '12px 16px', maxHeight: '55dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {infoBoxParts.map((p, i) => {
+                    const isReceived = scannedParts.includes(getPartKey(p.partNumber, String(infoBox)));
+                    return (
+                      <div key={i} style={{ backgroundColor: 'var(--bg-card)', borderRadius: '8px', padding: '10px 12px', border: `1px solid ${isReceived ? 'var(--success)' : 'var(--border-color)'}`, opacity: isReceived ? 0.7 : 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 800, fontSize: '13px', color: 'var(--text-primary)' }}>{p.partNumber}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 900, color: isReceived ? 'var(--success)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {isReceived ? <CheckCircle2 size={12} color="var(--success)" /> : <Circle size={12} />}
+                            {isReceived ? 'VERIFIED' : 'PENDING'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{p.description}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px' }}>Qty: {p.qty}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} /> {p.binLocation || 'N/A'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '10px' }}>
+                  <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} className="btn btn-primary" style={{ flex: 1, fontSize: '15px', fontWeight: 900, padding: '12px' }}>Close</button>
                 </div>
               </div>
             </div>
