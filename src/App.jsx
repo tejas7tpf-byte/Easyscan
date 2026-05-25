@@ -961,6 +961,7 @@ const App = () => {
                       <div>
                         <div style={{ fontWeight: 800, fontSize: '13px' }}>{p.partNumber}</div>
                         <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{p.description}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '2px', fontWeight: 600 }}>Inv: {p.invoiceNumber || '—'}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 900, fontSize: '13px', color: 'var(--primary)' }}>Qty: {p.qty}</div>
@@ -986,7 +987,10 @@ const App = () => {
                     <Info size={22} color="var(--primary)" />
                     <div>
                       <div style={{ fontWeight: 900, fontSize: '14px', color: 'var(--primary)' }}>BOX DETAILS</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{String(infoBox)} — {infoBoxParts.length} parts</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {String(infoBox)} — {infoBoxParts.length} parts
+                        {infoBoxParts[0]?.invoiceNumber && ` (Inv: ${infoBoxParts[0].invoiceNumber})`}
+                      </div>
                     </div>
                   </div>
                   <button onClick={() => { setInfoBox(null); setIsCameraOpen(true); }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
@@ -1006,6 +1010,7 @@ const App = () => {
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{p.description}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px' }}>Qty: {p.qty}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Inv: {p.invoiceNumber || '—'}</span>
                           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '3px' }}><MapPin size={10} /> {p.binLocation || 'N/A'}</span>
                         </div>
                       </div>
