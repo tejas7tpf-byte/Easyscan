@@ -1,59 +1,53 @@
 @echo off
-setlocal enabledelayedexpansion
-echo =======================================
-echo    EASYSCAN GITHUB PUSH SCRIPT
-echo =======================================
+color 0A
+title EasyScan - Automatic GitHub Push (tejas7tpf-byte)
+echo ========================================================
+echo    EASYSCAN GITHUB PUSH SCRIPT (tejas7tpf-byte)
+echo ========================================================
 echo.
 
-:: Set working directory to script location
 cd /d "%~dp0"
+
+:: Auto-clear old saved credentials for skcolourfulcreationsbuyin-lgtm
+cmdkey /delete:git:https://github.com >nul 2>&1
+git config --global user.name "tejas7tpf-byte"
 
 :: Check if git repository is initialized
 if not exist ".git" (
-    echo [!] Git repository not initialized. Initializing now...
+    echo [!] Initializing Git Repository...
     git init
+    git branch -M main
     echo.
 )
 
-:: Check if remote origin exists
+:: Ensure remote origin is set to tejas7tpf-byte/Easyscan.git
 git remote | find "origin" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo [!] No GitHub repository linked.
-    set /p repoUrl="Enter your GitHub Repository URL (e.g. https://github.com/username/repo.git): "
-    if not "!repoUrl!"=="" (
-        git remote add origin !repoUrl!
-        git branch -M main
-    ) else (
-        echo ERROR: Repository URL is required for the first push!
-        pause
-        exit /b
-    )
-    echo.
+if %errorlevel% neq 0 (
+    git remote add origin https://github.com/tejas7tpf-byte/Easyscan.git
 )
 
-echo [1/3] Adding changes to Git...
+echo [1/3] Adding changes...
 git add .
 
-echo.
-set /p commitMsg="Enter commit message (or press enter for default): "
-if "!commitMsg!"=="" set commitMsg=Update EasyScan System !date!
-
 echo [2/3] Committing changes...
-git commit -m "!commitMsg!"
+git commit -m "Auto Update EasyScan %date% %time:~0,5%"
 
 echo.
-echo [3/3] Pushing to GitHub...
+echo [3/3] Pushing to GitHub (tejas7tpf-byte)...
 git push -u origin main
 
 echo.
-if !errorlevel! equ 0 (
-    echo =======================================
+if %errorlevel% equ 0 (
+    echo ========================================================
     echo    GITHUB PUSH SUCCESSFUL! ✅
-    echo =======================================
+    echo ========================================================
 ) else (
-    echo =======================================
-    echo    ERROR: Failed to push to GitHub. ❌
-    echo    (Please check your internet or repository permissions)
-    echo =======================================
+    echo.
+    echo Cleaning old cache and opening GitHub Login...
+    cmdkey /delete:git:https://github.com >nul 2>&1
+    git credential-manager logout https://github.com >nul 2>&1
+    echo.
+    git push -u origin main
 )
+echo.
 pause
