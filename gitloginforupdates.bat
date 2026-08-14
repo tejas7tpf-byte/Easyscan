@@ -13,9 +13,9 @@ for /f "tokens=1,2 delims= " %%a in ('cmdkey /list ^| findstr /i "github"') do (
 )
 git credential-manager logout https://github.com >nul 2>&1
 
-echo [2/3] Clearing global user config...
-git config --global --unset user.name >nul 2>&1
-git config --global --unset user.email >nul 2>&1
+echo [2/3] Setting Git User Credentials...
+git config --global user.name "tejas7tpf-byte"
+git config --global user.email "tejas1.tpf@gmail.com"
 
 echo.
 echo [3/3] Opening GitHub Login Screen...

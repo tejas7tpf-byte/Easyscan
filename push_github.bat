@@ -8,9 +8,9 @@ echo.
 
 cd /d "%~dp0"
 
-:: Auto-clear old saved credentials for skcolourfulcreationsbuyin-lgtm
-cmdkey /delete:git:https://github.com >nul 2>&1
+:: Auto-set Git identity credentials so commit never fails
 git config --global user.name "tejas7tpf-byte"
+git config --global user.email "tejas1.tpf@gmail.com"
 
 :: Check if git repository is initialized
 if not exist ".git" (
@@ -30,7 +30,7 @@ echo [1/3] Adding changes...
 git add .
 
 echo [2/3] Committing changes...
-git commit -m "Auto Update EasyScan %date% %time:~0,5%"
+git commit -m "Auto Update EasyScan %date% %time:~0,5%" >nul 2>&1
 
 echo.
 echo [3/3] Pushing to GitHub (tejas7tpf-byte)...

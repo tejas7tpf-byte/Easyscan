@@ -12,6 +12,7 @@ git credential-manager logout https://github.com >nul 2>&1
 
 echo Setting active account to tejas7tpf-byte...
 git config --global user.name "tejas7tpf-byte"
+git config --global user.email "tejas1.tpf@gmail.com"
 
 echo.
 echo ✅ Done! Now running Push Script automatically...
