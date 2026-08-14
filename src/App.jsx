@@ -618,19 +618,28 @@ const App = () => {
   const handleShipmentScan = useCallback((query) => {
     const q = String(query || '').trim().toLowerCase();
     const shipments = data?.shipments || [];
-    const shipment = shipments.find(s => 
+    const matching = shipments.filter(s => 
       (s.trackingNo && String(s.trackingNo).toLowerCase() === q) || 
       (s.invoiceNo && String(s.invoiceNo).toLowerCase() === q) || 
       (s.truckNo && String(s.truckNo).toLowerCase() === q) || 
       (s.gatePass && String(s.gatePass).toLowerCase() === q)
     );
-    if (shipment) {
-      if (!selectedInvoices.includes(shipment.invoiceNo)) {
-        const newSel = [...selectedInvoices, shipment.invoiceNo];
+    if (matching.length > 0) {
+      let newSel = [...selectedInvoices];
+      let addedAny = false;
+      matching.forEach(s => {
+        if (!newSel.includes(s.invoiceNo)) {
+          newSel.push(s.invoiceNo);
+          addedAny = true;
+        }
+      });
+      if (addedAny) {
         setSelectedInvoices(newSel);
         updateSupabaseSelectedInvoices(currentLocation, newSel);
       }
-      setRecentScan({ type: 'success', text: `Selected: ${shipment.invoiceNo}` });
+      setRecentScan({ type: 'success', text: `Selected: ${matching.map(s => s.invoiceNo).join(', ')}` });
+    } else {
+      setRecentScan({ type: 'error', text: `No match: ${query}` });
     }
   }, [data, selectedInvoices, currentLocation]);
 
@@ -697,7 +706,16 @@ const App = () => {
           setRecentScan({ type: 'success', text: `Found: ${matchingPart.partNumber}` });
         }
       } else {
-        setRecentScan({ type: 'error', text: `No Match: ${q}` });
+        const partWithPendingBox = parts.find(p => 
+          selectedInvoices.includes(p.invoiceNumber) && 
+          (String(p.partNumber || '').toUpperCase() === q || String(p.partNumber || '').toUpperCase().includes(q))
+        );
+        if (partWithPendingBox) {
+          const boxId = getBoxId(partWithPendingBox);
+          setRecentScan({ type: 'error', text: `Box ${boxId} not received yet!` });
+        } else {
+          setRecentScan({ type: 'error', text: `No Match: ${q}` });
+        }
       }
     }
   }, [auditMode, selectedInvoices, receivedBoxes, data, activeCartonFilter, scannedParts, autoConfirmParts, allPendingBoxes, activeShipments]);
@@ -719,10 +737,7 @@ const App = () => {
 
   const pendingPartsToAudit = useMemo(() => {
     let eligible = safeParts.filter(p => {
-      const invMatch = selectedInvoices.includes(p.invoiceNumber);
-      const boxId = getBoxId(p).toUpperCase();
-      const boxReceived = receivedBoxes.includes(boxId);
-      return invMatch && boxReceived;
+      return selectedInvoices.includes(p.invoiceNumber);
     });
 
     if (activeCartonFilter) {
@@ -743,7 +758,7 @@ const App = () => {
       }
     });
     return aggregated;
-  }, [safeParts, selectedInvoices, receivedBoxes, activeCartonFilter]);
+  }, [safeParts, selectedInvoices, activeCartonFilter]);
 
   const stats = useMemo(() => {
     const relevantParts = safeParts.filter(p => selectedInvoices.includes(p.invoiceNumber));
@@ -1084,30 +1099,35 @@ const App = () => {
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 800, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                       <input 
                         type="checkbox" 
-                        checked={selectedPartsForReceive.length === visiblePendingParts.length}
+                        checked={selectedPartsForReceive.length === visiblePendingParts.filter(p => receivedBoxes.includes(getBoxId(p).toUpperCase())).length && visiblePendingParts.filter(p => receivedBoxes.includes(getBoxId(p).toUpperCase())).length > 0}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedPartsForReceive(visiblePendingParts.map(p => getPartKey(p.partNumber, getBoxId(p))));
+                            const eligibleKeys = visiblePendingParts
+                              .filter(p => receivedBoxes.includes(getBoxId(p).toUpperCase()))
+                              .map(p => getPartKey(p.partNumber, getBoxId(p)));
+                            setSelectedPartsForReceive(eligibleKeys);
                           } else {
                             setSelectedPartsForReceive([]);
                           }
                         }}
-                      /> All
+                      /> All Eligible
                     </label>
-                    <button 
-                      onClick={() => {
-                        const partsToReceive = selectedPartsForReceive.length > 0 
-                          ? visiblePendingParts.filter(p => selectedPartsForReceive.includes(getPartKey(p.partNumber, getBoxId(p))))
-                          : visiblePendingParts;
-                        
-                        partsToReceive.forEach(p => handleManualReceivePart(p.partNumber, getBoxId(p)));
-                        setSelectedPartsForReceive([]);
-                      }} 
-                      className="btn btn-primary btn-xs animate-fade-in" 
-                      style={{ padding: '2px 8px', fontSize: '10px', fontWeight: 800 }}
-                    >
-                      {selectedPartsForReceive.length > 0 ? `Receive Selected (${selectedPartsForReceive.length}) OK` : `Receive All ${visiblePendingParts.length} OK`}
-                    </button>
+                    {visiblePendingParts.filter(p => receivedBoxes.includes(getBoxId(p).toUpperCase())).length > 0 && (
+                      <button 
+                        onClick={() => {
+                          const partsToReceive = selectedPartsForReceive.length > 0 
+                            ? visiblePendingParts.filter(p => selectedPartsForReceive.includes(getPartKey(p.partNumber, getBoxId(p))))
+                            : visiblePendingParts.filter(p => receivedBoxes.includes(getBoxId(p).toUpperCase()));
+                          
+                          partsToReceive.forEach(p => handleManualReceivePart(p.partNumber, getBoxId(p)));
+                          setSelectedPartsForReceive([]);
+                        }} 
+                        className="btn btn-primary btn-xs animate-fade-in" 
+                        style={{ padding: '2px 8px', fontSize: '10px', fontWeight: 800 }}
+                      >
+                        {selectedPartsForReceive.length > 0 ? `Receive Selected (${selectedPartsForReceive.length}) OK` : `Receive All Eligible OK`}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1167,6 +1187,7 @@ const App = () => {
               }).map((p, i) => {
                 const boxId = getBoxId(p);
                 const isReceived = scannedParts.includes(getPartKey(p.partNumber, boxId));
+                const boxReceived = receivedBoxes.includes(boxId.toUpperCase());
                 return (
                   <div key={i} className="card" style={{ display: 'flex', gap: '8px', padding: '6px 8px', opacity: isReceived ? 0.5 : 1, borderColor: isReceived ? 'var(--success)' : 'var(--border-color)' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
@@ -1174,8 +1195,10 @@ const App = () => {
                       {!isReceived && (
                         <input 
                           type="checkbox" 
-                          style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                          style={{ width: '14px', height: '14px', cursor: boxReceived ? 'pointer' : 'not-allowed' }}
                           checked={selectedPartsForReceive.includes(getPartKey(p.partNumber, boxId))}
+                          disabled={!boxReceived}
+                          title={!boxReceived ? "Receive box first" : ""}
                           onChange={(e) => {
                             const key = getPartKey(p.partNumber, boxId);
                             if (e.target.checked) {
@@ -1195,7 +1218,25 @@ const App = () => {
                           <span style={{ fontSize: '10px', fontWeight: 900, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '2px' }}><MapPin size={9} /> {p.binLocation}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          {!isReceived && <button onClick={() => handleManualReceivePart(p.partNumber, boxId)} className="btn btn-primary" style={{ padding: '4px 14px', fontSize: '11px', fontWeight: 800 }}>OK</button>}
+                          {!isReceived && (
+                            <button 
+                              onClick={() => handleManualReceivePart(p.partNumber, boxId)} 
+                              className="btn btn-primary" 
+                              style={{ 
+                                padding: '4px 14px', 
+                                fontSize: '11px', 
+                                fontWeight: 800,
+                                opacity: boxReceived ? 1 : 0.5,
+                                cursor: boxReceived ? 'pointer' : 'not-allowed',
+                                backgroundColor: boxReceived ? 'var(--primary)' : 'var(--bg-card)',
+                                color: boxReceived ? '#fff' : 'var(--text-secondary)',
+                                borderColor: 'var(--border-color)'
+                              }}
+                              disabled={!boxReceived}
+                            >
+                              {boxReceived ? 'OK' : 'Wait Box'}
+                            </button>
+                          )}
                           {isReceived && <button onClick={() => handleUnreceivePart(p.partNumber, boxId)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}><RotateCcw size={18} /></button>}
                         </div>
                       </div>
@@ -1203,7 +1244,9 @@ const App = () => {
                       
                       <div style={{ display: 'flex', gap: '8px', marginTop: '3px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}><FileText size={8}/> {p.invoiceNumber}</span>
-                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}><Box size={8}/> {boxId}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
+                          <Box size={8}/> {boxId} {!boxReceived && <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>(Pending Box)</span>}
+                        </span>
                         {p.isUrgent && p.urgentDetails && p.urgentDetails.length > 0 && (
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                             {p.urgentDetails.map((u, uidx) => (
