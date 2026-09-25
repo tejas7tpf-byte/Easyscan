@@ -1,9 +1,10 @@
 import React from 'react';
-import { UploadCloud, FileCheck, AlertCircle, FileSpreadsheet, Loader2, Download, Database, Layers, Clock } from 'lucide-react';
+import { UploadCloud, FileCheck, AlertCircle, FileSpreadsheet, Loader2, Download, Database, Layers, Clock, RefreshCw, Zap } from 'lucide-react';
 import { exportMasterDataExcel } from '../utils/exporter';
 
-const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplementalImport, currentData, isProcessing = false, lastUpdate }) => {
-  const [importMode, setImportMode] = React.useState('extranet'); // 'extranet' | 'multi' | 'master' | 'supplemental'
+const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplementalImport, onBodyshopSync, currentData, isProcessing = false, lastUpdate }) => {
+  const [importMode, setImportMode] = React.useState('bodyshop_sync'); // 'bodyshop_sync' | 'extranet' | 'multi' | 'master' | 'supplemental'
+  const [syncLocation, setSyncLocation] = React.useState('Vastral');
   const [masterFile, setMasterFile] = React.useState(null);
   const [extranetFile, setExtranetFile] = React.useState(null);
   const [extranetPM, setExtranetPM] = React.useState(null);
@@ -33,7 +34,7 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
         <h2 className="text-2xl font-bold">Data Management</h2>
-        <p className="text-sm text-muted" style={{ marginTop: '4px' }}>Import raw sheets, Extranet workbooks, or manage master backups.</p>
+        <p className="text-sm text-muted" style={{ marginTop: '4px' }}>Sync live from Bodyshop App database or import Extranet workbooks.</p>
         {lastUpdate && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', backgroundColor: 'var(--bg-surface)', padding: '6px 12px', borderRadius: '16px', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', marginTop: '12px' }}>
             <Clock size={14} className="text-primary" />
@@ -42,8 +43,14 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
         )}
       </div>
 
-      {/* 4-Way Mode Toggle */}
+      {/* 5-Way Mode Toggle */}
       <div style={{ display: 'flex', backgroundColor: 'var(--bg-card)', borderRadius: '10px', padding: '4px', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '4px' }}>
+        <button 
+          onClick={() => setImportMode('bodyshop_sync')} 
+          style={{ flex: 1, minWidth: '140px', padding: '10px 8px', borderRadius: '8px', border: 'none', cursor: 'pointer', backgroundColor: importMode === 'bodyshop_sync' ? 'var(--primary)' : 'transparent', color: importMode === 'bodyshop_sync' ? '#ffffff' : 'var(--text-secondary)', fontWeight: 800, fontSize: '12px', textAlign: 'center' }}
+        >
+          ⚡ Live Bodyshop Sync
+        </button>
         <button 
           onClick={() => setImportMode('extranet')} 
           style={{ flex: 1, minWidth: '120px', padding: '10px 8px', borderRadius: '8px', border: 'none', cursor: 'pointer', backgroundColor: importMode === 'extranet' ? 'var(--bg-surface)' : 'transparent', color: importMode === 'extranet' ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '12px', textAlign: 'center' }}
@@ -69,6 +76,48 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
           Update Part/Bodyshop
         </button>
       </div>
+
+      {importMode === 'bodyshop_sync' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--primary)', backgroundColor: 'var(--bg-surface)' }}>
+            <div>
+              <h3 className="text-lg font-bold" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={22} className="text-primary" /> 1-Click Live Sync from Bodyshop Tracking App
+              </h3>
+              <p className="text-xs text-muted" style={{ marginTop: '6px', lineHeight: '1.5' }}>
+                No file upload needed! Automatically fetch Extranet Dispatches, Part Master Bin Locations, and PNA/Jobcards tracking sheet directly from your shared <strong>Bodyshop Supabase Database</strong>.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', backgroundColor: 'var(--bg-card)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Select Location:</label>
+                <select
+                  value={syncLocation}
+                  onChange={(e) => setSyncLocation(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '13px' }}
+                >
+                  <option value="Vastral">Vastral</option>
+                  <option value="SG Highway">SG Highway</option>
+                  <option value="Sanand">Sanand</option>
+                  <option value="Naroda">Naroda</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onBodyshopSync && onBodyshopSync(syncLocation)}
+                disabled={isProcessing}
+                className="btn btn-primary"
+                style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isProcessing ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                {isProcessing ? 'Syncing...' : 'Sync Live Bodyshop Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {importMode === 'extranet' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

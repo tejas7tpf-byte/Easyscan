@@ -528,6 +528,29 @@ const App = () => {
     }, 100);
   };
 
+  const handleBodyshopSync = async (locationName = 'Vastral') => {
+    setIsProcessing(true);
+    try {
+      const { fetchBodyshopLiveData } = await import('./utils/bodyshopSyncService');
+      const result = await fetchBodyshopLiveData(locationName);
+      
+      setData({ shipments: result.shipments, parts: result.parts });
+      await uploadLocationData(currentLocation, result.shipments, result.parts);
+      
+      const now = new Date().toLocaleString();
+      setLastUpdate(now);
+      localStorage.setItem(`easyscan_last_update_v29_${currentLocation}`, now);
+      
+      alert(`⚡ Live Sync Success! Loaded ${result.totalPartsCount} parts & ${result.totalShipmentsCount} shipments directly from Bodyshop Supabase database (${locationName}).`);
+      setActiveTab('shipment');
+    } catch (err) {
+      console.error('Bodyshop sync error:', err);
+      alert('Error syncing live Bodyshop data: ' + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const triggerFocus = () => setFocusTrigger(prev => prev + 1);
 
   const handleBack = () => {
@@ -810,6 +833,7 @@ const App = () => {
             onMasterImport={handleMasterImport}
             onExtranetImport={handleExtranetImport}
             onSupplementalImport={handleSupplementalImport}
+            onBodyshopSync={handleBodyshopSync}
             currentData={rawData}
             isProcessing={isProcessing} 
             lastUpdate={lastUpdate}
