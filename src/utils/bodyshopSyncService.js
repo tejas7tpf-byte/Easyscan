@@ -1,4 +1,4 @@
-import { supabase, fetchAllRows, isReceiveDateCompleted } from './supabaseClient';
+import { supabase, isReceiveDateCompleted } from './supabaseClient';
 
 export const normalizeLocationName = (loc) => {
   if (!loc) return 'Vastral';
@@ -34,7 +34,6 @@ const getBasePartNo = (cleanPn) => {
  * Direct Live Sync from Bodyshop Tracking Supabase Database
  * Fetches Extranet Dispatches, Part Master Bin Locations & Descriptions, and PNA/Jobcards
  * directly from Bodyshop tables (dispatch_status, dispatch_detail, part_master, jobcards).
- * Uses high-speed targeted queries to prevent browser timeouts.
  * 
  * @param {string} locationName - Target location (e.g. 'Vastral', 'Bopal', 'Nexa', etc.)
  */
@@ -46,25 +45,29 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
   const targetLoc = normalizeLocationName(locationName);
 
   try {
-    // 1. Fetch Extranet Dispatches for target location first
-    const [rawDispatchDetails, rawDispatchStatus] = await Promise.all([
-      fetchAllRows(
-        () => supabase.from('dispatch_detail').select('*').eq('location', targetLoc)
-      ).catch((err) => {
-        console.warn('dispatch_detail fetch error:', err);
-        return [];
-      }),
-      fetchAllRows(
-        () => supabase.from('dispatch_status').select('*').eq('location', targetLoc)
-      ).catch((err) => {
-        console.warn('dispatch_status fetch error:', err);
-        return [];
-      })
+    // 1. Fetch Extranet Dispatches for target location directly
+    let [ddRes, dsRes] = await Promise.all([
+      supabase.from('dispatch_detail').select('*').eq('location', targetLoc),
+      supabase.from('dispatch_status').select('*').eq('location', targetLoc)
     ]);
+
+    let rawDispatchDetails = ddRes.data || [];
+    let rawDispatchStatus = dsRes.data || [];
+
+    // Fallback if eq returns 0 rows due to casing or formatting
+    if (rawDispatchDetails.length === 0) {
+      const { data: fallbackDd } = await supabase.from('dispatch_detail').select('*').ilike('location', `%${targetLoc}%`);
+      rawDispatchDetails = fallbackDd || [];
+    }
+
+    if (rawDispatchStatus.length === 0) {
+      const { data: fallbackDs } = await supabase.from('dispatch_status').select('*').ilike('location', `%${targetLoc}%`);
+      rawDispatchStatus = fallbackDs || [];
+    }
 
     // Extract unique clean part numbers to target in part_master
     const uniquePnSet = new Set();
-    (rawDispatchDetails || []).forEach(row => {
+    rawDispatchDetails.forEach(row => {
       const pn = cleanPartNo(row.part_number || row.part_num);
       if (pn) {
         uniquePnSet.add(pn);
@@ -76,22 +79,15 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     const targetPartNumbers = Array.from(uniquePnSet);
 
     // 2. Fetch Part Master (Target Location + Specific Dispatched Part Numbers globally)
-    const [pmLocal, pmGlobal] = await Promise.all([
-      fetchAllRows(
-        () => supabase
-          .from('part_master')
-          .select('part_num, bin_location, part_desc, location')
-          .eq('location', targetLoc)
-      ).catch(() => []),
+    const [pmLocalRes, pmGlobalRes] = await Promise.all([
+      supabase.from('part_master').select('part_num, bin_location, part_desc, location').eq('location', targetLoc).limit(20000),
       targetPartNumbers.length > 0 ? (
-        fetchAllRows(
-          () => supabase
-            .from('part_master')
-            .select('part_num, bin_location, part_desc, location')
-            .in('part_num', targetPartNumbers)
-        ).catch(() => [])
-      ) : Promise.resolve([])
+        supabase.from('part_master').select('part_num, bin_location, part_desc, location').in('part_num', targetPartNumbers)
+      ) : Promise.resolve({ data: [] })
     ]);
+
+    const pmLocal = pmLocalRes.data || [];
+    const pmGlobal = pmGlobalRes.data || [];
 
     const pmMapLocal = new Map();
     const pmMapGlobal = new Map();
@@ -110,8 +106,8 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       }
     };
 
-    (pmLocal || []).forEach(r => addPmEntry(pmMapLocal, r));
-    (pmGlobal || []).forEach(r => addPmEntry(pmMapGlobal, r));
+    pmLocal.forEach(r => addPmEntry(pmMapLocal, r));
+    pmGlobal.forEach(r => addPmEntry(pmMapGlobal, r));
 
     const getPartMasterInfo = (cleanPn) => {
       // 1. Local location match
@@ -128,12 +124,11 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     };
 
     // 3. Fetch Jobcards for Urgent Vehicle tracking (unreceived PNA parts)
-    const jcData = await fetchAllRows(
-      () => supabase
-        .from('jobcards')
-        .select('part_number, vehicle_no, model, total_demand, status, receive_date, issue_date, location')
-        .eq('location', targetLoc)
-    ).catch(() => []);
+    const { data: jcData } = await supabase
+      .from('jobcards')
+      .select('part_number, vehicle_no, model, total_demand, status, receive_date, issue_date, location')
+      .eq('location', targetLoc)
+      .limit(10000);
 
     const urgentMap = new Map();
     (jcData || []).forEach(row => {
@@ -162,7 +157,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     });
 
     // 4. Enrich parts list from dispatch_detail
-    const enrichedParts = (rawDispatchDetails || []).map(row => {
+    const enrichedParts = rawDispatchDetails.map(row => {
       const pn = String(row.part_number || row.part_num || '').trim().toUpperCase();
       const cleanPn = cleanPartNo(pn);
       const invNo = String(row.invoice_no || '').trim();
@@ -194,7 +189,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     }).filter(Boolean);
 
     // 5. Process shipments list from dispatch_status
-    const shipments = (rawDispatchStatus || []).map(row => {
+    const shipments = rawDispatchStatus.map(row => {
       const invNo = String(row.invoice_no || row.fin_ctrl_no || '').trim();
       if (!invNo) return null;
 

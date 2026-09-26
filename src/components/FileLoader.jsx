@@ -2,9 +2,19 @@ import React from 'react';
 import { UploadCloud, FileCheck, AlertCircle, FileSpreadsheet, Loader2, Download, Database, Layers, Clock, RefreshCw, Zap } from 'lucide-react';
 import { exportMasterDataExcel } from '../utils/exporter';
 
-const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplementalImport, onBodyshopSync, currentData, isProcessing = false, lastUpdate }) => {
+const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplementalImport, onBodyshopSync, currentData, isProcessing = false, lastUpdate, currentUser, currentLocation }) => {
   const [importMode, setImportMode] = React.useState('bodyshop_sync'); // 'bodyshop_sync' | 'extranet' | 'multi' | 'master' | 'supplemental'
-  const [syncLocation, setSyncLocation] = React.useState('Vastral');
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.username === 'pegasus.spare' || currentUser?.locationId === 'all';
+  
+  const userLocName = currentLocation ? (currentLocation.charAt(0).toUpperCase() + currentLocation.slice(1)) : 'Vastral';
+  const [syncLocation, setSyncLocation] = React.useState(userLocName);
+
+  React.useEffect(() => {
+    if (!isAdmin && userLocName) {
+      setSyncLocation(userLocName);
+    }
+  }, [userLocName, isAdmin]);
+
   const [masterFile, setMasterFile] = React.useState(null);
   const [extranetFile, setExtranetFile] = React.useState(null);
   const [extranetPM, setExtranetPM] = React.useState(null);
@@ -114,15 +124,21 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', backgroundColor: 'var(--bg-card)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Select Location:</label>
-                <select
-                  value={syncLocation}
-                  onChange={(e) => setSyncLocation(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '13px' }}
-                >
-                  {locationsList.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
+                {isAdmin ? (
+                  <select
+                    value={syncLocation}
+                    onChange={(e) => setSyncLocation(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '13px' }}
+                  >
+                    {locationsList.map(loc => (
+                      <option key={loc} value={loc}>{loc}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span style={{ fontSize: '13px', fontWeight: 900, color: 'var(--primary)', backgroundColor: 'var(--bg-surface)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                    {userLocName}
+                  </span>
+                )}
               </div>
 
               <button

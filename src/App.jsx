@@ -837,6 +837,8 @@ const App = () => {
             currentData={rawData}
             isProcessing={isProcessing} 
             lastUpdate={lastUpdate}
+            currentUser={currentUser}
+            currentLocation={currentLocation}
           />
         </div>
       )}
