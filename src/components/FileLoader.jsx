@@ -30,6 +30,28 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
   const isSupplementalOnlyReady = !extranetFile && (extranetPM || extranetBT) && !isProcessing;
   const isAnyExtranetReady = isExtranetReady || isSupplementalOnlyReady;
 
+  const [locationsList, setLocationsList] = React.useState(['Vastral', 'Bopal', 'Nexa', 'Shela', 'Surat', 'Changodar']);
+
+  React.useEffect(() => {
+    const fetchLocs = async () => {
+      try {
+        const { supabase } = await import('../utils/supabaseClient');
+        if (!supabase) return;
+        const { data: locsData, error } = await supabase
+          .from('app_locations')
+          .select('location_name')
+          .eq('allow_extranet_upload', true)
+          .order('location_name', { ascending: true });
+        if (!error && locsData && locsData.length > 0) {
+          setLocationsList(locsData.map(l => l.location_name));
+        }
+      } catch (e) {
+        console.warn('Location fetch warning:', e);
+      }
+    };
+    fetchLocs();
+  }, []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
@@ -97,10 +119,9 @@ const FileLoader = ({ onFilesLoaded, onMasterImport, onExtranetImport, onSupplem
                   onChange={(e) => setSyncLocation(e.target.value)}
                   style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '13px' }}
                 >
-                  <option value="Vastral">Vastral</option>
-                  <option value="SG Highway">SG Highway</option>
-                  <option value="Sanand">Sanand</option>
-                  <option value="Naroda">Naroda</option>
+                  {locationsList.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
                 </select>
               </div>
 
