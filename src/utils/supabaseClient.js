@@ -6,8 +6,10 @@ const REQUIRED_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const envUrl = import.meta.env.VITE_SUPABASE_URL;
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl = (envUrl && envUrl.includes('mrkxeidlfteoqtrtetfs')) ? envUrl : REQUIRED_URL;
-const supabaseAnonKey = (envKey && envKey.length > 100) ? envKey : REQUIRED_KEY;
+const isCorrectEnv = envUrl && envUrl.includes('mrkxeidlfteoqtrtetfs') && envKey;
+
+const supabaseUrl = isCorrectEnv ? envUrl : REQUIRED_URL;
+const supabaseAnonKey = isCorrectEnv ? envKey : REQUIRED_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
