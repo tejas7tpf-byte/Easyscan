@@ -535,6 +535,7 @@ const App = () => {
       const result = await fetchBodyshopLiveData(locationName);
       
       setData({ shipments: result.shipments, parts: result.parts });
+      setSelectedInvoices(result.shipments.map(s => s.invoiceNo));
       await uploadLocationData(currentLocation, result.shipments, result.parts);
       
       const now = new Date().toLocaleString();

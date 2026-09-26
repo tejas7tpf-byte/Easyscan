@@ -4,9 +4,10 @@ import { supabase, isSupabaseConfigured } from './supabaseClient';
  * Fetches all active data (shipments, parts, scans, selected invoices) for a specific location
  */
 export const fetchLocationData = async (locationId) => {
-  if (!isSupabaseConfigured()) {
-    // Fallback to localStorage
-    const locSuffix = `_${locationId}`;
+  const locSuffix = `_${locationId}`;
+
+  // Helper to load fallback from localStorage
+  const getLocalStorageFallback = () => {
     const savedData = localStorage.getItem(`easyscan_data_v29${locSuffix}`);
     const savedSelected = localStorage.getItem(`easyscan_selected_v29${locSuffix}`);
     const savedBoxes = localStorage.getItem(`easyscan_boxes_v29${locSuffix}`);
@@ -24,16 +25,25 @@ export const fetchLocationData = async (locationId) => {
       scanTimestamps: savedTimestamps ? JSON.parse(savedTimestamps) : {},
       lastUpdate: savedLast || null
     };
+  };
+
+  if (!isSupabaseConfigured()) {
+    return getLocalStorageFallback();
   }
 
   try {
-    // Fetch from Supabase
+    // Attempt Supabase fetch
     const [shipmentsRes, partsRes, scansRes, selectedRes] = await Promise.all([
       supabase.from('shipments').select('*').eq('location_id', locationId),
       supabase.from('parts').select('*').eq('location_id', locationId),
       supabase.from('scans').select('*').eq('location_id', locationId),
       supabase.from('selected_invoices').select('*').eq('location_id', locationId)
     ]);
+
+    // If tables do not exist in schema cache (code PGRST205), fallback to localStorage
+    if (shipmentsRes.error?.code === 'PGRST205' || partsRes.error?.code === 'PGRST205') {
+      return getLocalStorageFallback();
+    }
 
     const shipments = (shipmentsRes.data || []).map(s => ({
       invoiceNo: s.invoice_no,
@@ -74,9 +84,15 @@ export const fetchLocationData = async (locationId) => {
 
     const selectedInvoices = (selectedRes.data || []).map(s => s.invoice_no);
 
+    // If Supabase tables return empty data, fall back to localStorage
+    if (shipments.length === 0 && parts.length === 0) {
+      const fallback = getLocalStorageFallback();
+      if (fallback.data.shipments.length > 0) return fallback;
+    }
+
     return {
       data: { shipments, parts },
-      rawData: null, // Raw data is only needed for initial parsing
+      rawData: null,
       selectedInvoices,
       receivedBoxes,
       scannedParts,
@@ -84,29 +100,35 @@ export const fetchLocationData = async (locationId) => {
       lastUpdate: shipmentsRes.data?.[0]?.created_at ? new Date(shipmentsRes.data[0].created_at).toLocaleString() : null
     };
   } catch (error) {
-    console.error("Supabase fetch error:", error);
-    throw error;
+    console.warn("Supabase fetch warning, falling back to localStorage:", error);
+    return getLocalStorageFallback();
   }
 };
 
 /**
- * Uploads newly imported Extranet data to Supabase for a specific location
+ * Uploads newly imported Extranet data for a specific location
  */
 export const uploadLocationData = async (locationId, shipments, parts) => {
-  if (!isSupabaseConfigured()) {
-    return; // Handled by localStorage useEffect in App
+  const locSuffix = `_${locationId}`;
+  
+  // Always update localStorage first for instant client availability
+  try {
+    localStorage.setItem(`easyscan_data_v29${locSuffix}`, JSON.stringify({ shipments, parts }));
+  } catch (e) {
+    console.warn("localStorage save warning:", e);
   }
 
+  if (!isSupabaseConfigured()) return;
+
   try {
-    // 1. Clear existing data for this location
+    // Attempt Supabase insert if custom tables exist
     await Promise.all([
       supabase.from('shipments').delete().eq('location_id', locationId),
       supabase.from('parts').delete().eq('location_id', locationId),
       supabase.from('scans').delete().eq('location_id', locationId),
       supabase.from('selected_invoices').delete().eq('location_id', locationId)
-    ]);
+    ]).catch(() => {});
 
-    // 2. Insert new shipments
     if (shipments.length > 0) {
       const shipmentInserts = shipments.map(s => ({
         location_id: locationId,
@@ -119,10 +141,9 @@ export const uploadLocationData = async (locationId, shipments, parts) => {
         total_parts: s.totalParts || 0,
         boxes: s.boxes || []
       }));
-      await supabase.from('shipments').insert(shipmentInserts);
+      await supabase.from('shipments').insert(shipmentInserts).catch(() => {});
     }
 
-    // 3. Insert new parts in chunks of 500 to avoid payload limits
     if (parts.length > 0) {
       const partInserts = parts.map(p => ({
         location_id: locationId,
@@ -140,12 +161,11 @@ export const uploadLocationData = async (locationId, shipments, parts) => {
 
       const chunkSize = 500;
       for (let i = 0; i < partInserts.length; i += chunkSize) {
-        await supabase.from('parts').insert(partInserts.slice(i, i + chunkSize));
+        await supabase.from('parts').insert(partInserts.slice(i, i + chunkSize)).catch(() => {});
       }
     }
   } catch (error) {
-    console.error("Supabase upload error:", error);
-    throw error;
+    console.warn("Supabase upload warning (handled silently):", error);
   }
 };
 
@@ -160,9 +180,9 @@ export const saveSupabaseScan = async (locationId, scanKey, scanType, currentUse
       scan_key: scanKey,
       scan_type: scanType,
       scanned_by: currentUser?.name || currentUser?.username || 'Unknown'
-    });
+    }).catch(() => {});
   } catch (error) {
-    console.error("Supabase save scan error:", error);
+    console.warn("Supabase save scan warning:", error);
   }
 };
 
@@ -175,9 +195,10 @@ export const removeSupabaseScan = async (locationId, scanKey, scanType) => {
     await supabase.from('scans').delete()
       .eq('location_id', locationId)
       .eq('scan_key', scanKey)
-      .eq('scan_type', scanType);
+      .eq('scan_type', scanType)
+      .catch(() => {});
   } catch (error) {
-    console.error("Supabase remove scan error:", error);
+    console.warn("Supabase remove scan warning:", error);
   }
 };
 
@@ -187,15 +208,15 @@ export const removeSupabaseScan = async (locationId, scanKey, scanType) => {
 export const updateSupabaseSelectedInvoices = async (locationId, selectedInvoices) => {
   if (!isSupabaseConfigured()) return;
   try {
-    await supabase.from('selected_invoices').delete().eq('location_id', locationId);
+    await supabase.from('selected_invoices').delete().eq('location_id', locationId).catch(() => {});
     if (selectedInvoices.length > 0) {
       const inserts = selectedInvoices.map(inv => ({
         location_id: locationId,
         invoice_no: inv
       }));
-      await supabase.from('selected_invoices').insert(inserts);
+      await supabase.from('selected_invoices').insert(inserts).catch(() => {});
     }
   } catch (error) {
-    console.error("Supabase update selected invoices error:", error);
+    console.warn("Supabase update selected invoices warning:", error);
   }
 };
