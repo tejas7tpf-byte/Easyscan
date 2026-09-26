@@ -273,7 +273,21 @@ const App = () => {
       }
 
       const savedSelected = localStorage.getItem(`easyscan_selected_v29${locSuffix}`);
-      setSelectedInvoices(savedSelected ? JSON.parse(savedSelected) || [] : []);
+      const initialSelected = savedSelected ? JSON.parse(savedSelected) || [] : [];
+      if (initialSelected.length > 0) {
+        setSelectedInvoices(initialSelected);
+      } else if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed && Array.isArray(parsed.shipments) && parsed.shipments.length > 0) {
+          const allInvoices = parsed.shipments.map(s => s.invoiceNo);
+          setSelectedInvoices(allInvoices);
+          localStorage.setItem(`easyscan_selected_v29${locSuffix}`, JSON.stringify(allInvoices));
+        } else {
+          setSelectedInvoices([]);
+        }
+      } else {
+        setSelectedInvoices([]);
+      }
 
       const savedBoxes = localStorage.getItem(`easyscan_boxes_v29${locSuffix}`);
       if (savedBoxes) {
@@ -534,8 +548,14 @@ const App = () => {
       const { fetchBodyshopLiveData } = await import('./utils/bodyshopSyncService');
       const result = await fetchBodyshopLiveData(locationName);
       
+      const allInvoices = (result.shipments || []).map(s => s.invoiceNo);
       setData({ shipments: result.shipments, parts: result.parts });
-      setSelectedInvoices(result.shipments.map(s => s.invoiceNo));
+      setSelectedInvoices(allInvoices);
+      
+      const locSuffix = `_${currentLocation}`;
+      localStorage.setItem(`easyscan_data_v29${locSuffix}`, JSON.stringify({ shipments: result.shipments, parts: result.parts }));
+      localStorage.setItem(`easyscan_selected_v29${locSuffix}`, JSON.stringify(allInvoices));
+      
       await uploadLocationData(currentLocation, result.shipments, result.parts);
       
       const now = new Date().toLocaleString();
