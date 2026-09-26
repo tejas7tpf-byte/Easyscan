@@ -17,10 +17,6 @@ export const normalizeLocationName = (loc) => {
 
 const cleanPartNo = (str) => String(str || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
-/**
- * Extract base part number by stripping common color codes and extra suffixes
- * e.g., 71751M85S205PK -> 71751M85S20, 77831M77P00-ZSP -> 77831M77P00
- */
 const getBasePartNo = (cleanPn) => {
   if (!cleanPn || cleanPn.length < 8) return cleanPn;
   const withoutHyphen = cleanPn.split('-')[0];
@@ -42,28 +38,26 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     throw new Error('Supabase client is not configured.');
   }
 
-  const targetLoc = normalizeLocationName(locationName);
+  const normTarget = (locationName || 'Vastral').toLowerCase().replace('store', '').trim();
 
   try {
-    // 1. Fetch Extranet Dispatches for target location directly
-    let [ddRes, dsRes] = await Promise.all([
-      supabase.from('dispatch_detail').select('*').eq('location', targetLoc),
-      supabase.from('dispatch_status').select('*').eq('location', targetLoc)
+    // 1. Fetch Extranet Dispatches globally to guarantee zero query failure
+    const [ddRes, dsRes] = await Promise.all([
+      supabase.from('dispatch_detail').select('*'),
+      supabase.from('dispatch_status').select('*')
     ]);
 
-    let rawDispatchDetails = ddRes.data || [];
-    let rawDispatchStatus = dsRes.data || [];
+    if (ddRes.error) throw new Error('dispatch_detail fetch error: ' + ddRes.error.message);
+    if (dsRes.error) throw new Error('dispatch_status fetch error: ' + dsRes.error.message);
 
-    // Fallback if eq returns 0 rows due to casing or formatting
-    if (rawDispatchDetails.length === 0) {
-      const { data: fallbackDd } = await supabase.from('dispatch_detail').select('*').ilike('location', `%${targetLoc}%`);
-      rawDispatchDetails = fallbackDd || [];
-    }
+    const filterByLoc = (r) => {
+      if (!normTarget || normTarget === 'all' || normTarget === 'main') return true;
+      const l = String(r.location || '').toLowerCase();
+      return l.includes(normTarget) || normTarget.includes(l);
+    };
 
-    if (rawDispatchStatus.length === 0) {
-      const { data: fallbackDs } = await supabase.from('dispatch_status').select('*').ilike('location', `%${targetLoc}%`);
-      rawDispatchStatus = fallbackDs || [];
-    }
+    const rawDispatchDetails = (ddRes.data || []).filter(filterByLoc);
+    const rawDispatchStatus = (dsRes.data || []).filter(filterByLoc);
 
     // Extract unique clean part numbers to target in part_master
     const uniquePnSet = new Set();
@@ -78,48 +72,39 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
 
     const targetPartNumbers = Array.from(uniquePnSet);
 
-    // 2. Fetch Part Master (Target Location + Specific Dispatched Part Numbers globally)
-    const [pmLocalRes, pmGlobalRes] = await Promise.all([
-      supabase.from('part_master').select('part_num, bin_location, part_desc, location').eq('location', targetLoc).limit(20000),
-      targetPartNumbers.length > 0 ? (
-        supabase.from('part_master').select('part_num, bin_location, part_desc, location').in('part_num', targetPartNumbers)
-      ) : Promise.resolve({ data: [] })
-    ]);
+    // 2. Fetch Part Master in small chunks to prevent HTTP 414 / GET URL limits
+    let pmData = [];
+    if (targetPartNumbers.length > 0) {
+      const chunkSize = 80;
+      for (let i = 0; i < targetPartNumbers.length; i += chunkSize) {
+        const chunk = targetPartNumbers.slice(i, i + chunkSize);
+        const { data: chunkPm, error: pmErr } = await supabase
+          .from('part_master')
+          .select('part_num, bin_location, part_desc, location')
+          .in('part_num', chunk);
+        if (chunkPm) pmData.push(...chunkPm);
+      }
+    }
 
-    const pmLocal = pmLocalRes.data || [];
-    const pmGlobal = pmGlobalRes.data || [];
-
-    const pmMapLocal = new Map();
-    const pmMapGlobal = new Map();
-
-    const addPmEntry = (map, row) => {
+    const pmMap = new Map();
+    pmData.forEach(row => {
       const pn = cleanPartNo(row.part_num);
       const bin = String(row.bin_location || '').trim();
       const desc = String(row.part_desc || row.description || row.part_name || '').trim();
       if (pn) {
-        if (!map.has(pn) || (bin && bin !== 'NA' && bin !== '-' && bin !== 'NOBIN')) {
-          map.set(pn, {
+        if (!pmMap.has(pn) || (bin && bin !== 'NA' && bin !== '-' && bin !== 'NOBIN')) {
+          pmMap.set(pn, {
             bin: bin && bin !== '-' ? bin : 'N/A',
             desc: desc || ''
           });
         }
       }
-    };
-
-    pmLocal.forEach(r => addPmEntry(pmMapLocal, r));
-    pmGlobal.forEach(r => addPmEntry(pmMapGlobal, r));
+    });
 
     const getPartMasterInfo = (cleanPn) => {
-      // 1. Local location match
-      if (pmMapLocal.has(cleanPn)) return pmMapLocal.get(cleanPn);
-      // 2. Global match
-      if (pmMapGlobal.has(cleanPn)) return pmMapGlobal.get(cleanPn);
-      // 3. Base part number match
+      if (pmMap.has(cleanPn)) return pmMap.get(cleanPn);
       const basePn = getBasePartNo(cleanPn);
-      if (basePn && basePn !== cleanPn) {
-        if (pmMapLocal.has(basePn)) return pmMapLocal.get(basePn);
-        if (pmMapGlobal.has(basePn)) return pmMapGlobal.get(basePn);
-      }
+      if (basePn && pmMap.has(basePn)) return pmMap.get(basePn);
       return null;
     };
 
@@ -127,16 +112,16 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     const { data: jcData } = await supabase
       .from('jobcards')
       .select('part_number, vehicle_no, model, total_demand, status, receive_date, issue_date, location')
-      .eq('location', targetLoc)
       .limit(10000);
 
+    const filteredJc = (jcData || []).filter(filterByLoc);
+
     const urgentMap = new Map();
-    (jcData || []).forEach(row => {
+    filteredJc.forEach(row => {
       const isReceived = isReceiveDateCompleted(row.receive_date);
       const isIssued = isReceiveDateCompleted(row.issue_date);
       const st = String(row.status || '').trim().toLowerCase();
 
-      // Exclude parts that are already received or issued or completed
       if (isReceived || isIssued || st.includes('receive') || st.includes('issued') || st.includes('completed')) {
         return;
       }
@@ -188,11 +173,21 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       };
     }).filter(Boolean);
 
-    // 5. Process shipments list from dispatch_status
-    const shipments = rawDispatchStatus.map(row => {
+    // 5. Build shipments list from DS and DD
+    const dsMap = new Map();
+    rawDispatchStatus.forEach(row => {
       const invNo = String(row.invoice_no || row.fin_ctrl_no || '').trim();
-      if (!invNo) return null;
+      if (invNo) dsMap.set(invNo, row);
+    });
 
+    const allInvoiceNos = new Set([
+      ...rawDispatchStatus.map(r => String(r.invoice_no || r.fin_ctrl_no || '').trim()),
+      ...rawDispatchDetails.map(r => String(r.invoice_no || '').trim())
+    ]);
+    allInvoiceNos.delete('');
+
+    const shipments = Array.from(allInvoiceNos).map(invNo => {
+      const dsRow = dsMap.get(invNo) || {};
       const shipmentParts = enrichedParts.filter(p => p.invoiceNumber === invNo);
       const boxSet = new Set();
       shipmentParts.forEach(p => {
@@ -202,16 +197,16 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
 
       return {
         invoiceNo: invNo,
-        trackingNo: String(row.tracking_no || '').trim(),
-        truckNo: String(row.truck_no || '').trim(),
-        gatePass: String(row.gate_pass_no || row.gate_pass || '').trim(),
-        transporter: String(row.transporter || '').trim(),
-        location: String(row.location || targetLoc).trim(),
+        trackingNo: String(dsRow.tracking_no || '').trim(),
+        truckNo: String(dsRow.truck_no || '').trim(),
+        gatePass: String(dsRow.gate_pass_no || dsRow.gate_pass || '').trim(),
+        transporter: String(dsRow.transporter || '').trim(),
+        location: String(dsRow.location || locationName).trim(),
         totalBoxes: boxSet.size,
         boxes: Array.from(boxSet),
         totalParts: shipmentParts.reduce((acc, p) => acc + p.qty, 0)
       };
-    }).filter(Boolean);
+    });
 
     return {
       shipments,
