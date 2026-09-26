@@ -197,7 +197,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
 
       return {
         invoiceNo: invNo,
-        trackingNo: String(dsRow.tracking_no || '').trim(),
+        trackingNo: String(dsRow.goods_receipt_no || dsRow.tracking_no || dsRow.goods_receipt || '').trim(),
         truckNo: String(dsRow.truck_no || '').trim(),
         gatePass: String(dsRow.gate_pass_no || dsRow.gate_pass || '').trim(),
         transporter: String(dsRow.transporter || '').trim(),

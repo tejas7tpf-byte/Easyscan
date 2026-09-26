@@ -231,7 +231,7 @@ const App = () => {
 
   const isCourier = (transporter) => {
     const t = String(transporter || '').toLowerCase();
-    return t.includes('scou') || t.includes('blrd') || t.includes('deli') || t.includes('courier');
+    return t.includes('scou') || t.includes('blrd') || t.includes('deli') || t.includes('courier') || t.includes('msafe') || t.includes('acarg') || t.includes('xps') || t.includes('express');
   };
 
   const getBoxId = (p) => {
@@ -934,10 +934,13 @@ const App = () => {
                     </div>
                     <span style={{ fontSize: '10px', fontWeight: 700, backgroundColor: 'rgba(0,122,255,0.1)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '6px' }}>{s.totalBoxes} Bx</span>
                   </div>
-                  {(courier ? s.trackingNo : s.truckNo) && (
-                    <div style={{ display: 'flex', gap: '16px', marginLeft: '20px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      {courier && s.trackingNo && <span>Tracking No: <strong style={{ color: 'var(--text-primary)' }}>{s.trackingNo}</strong></span>}
-                      {!courier && s.truckNo && <span>Truck No: <strong style={{ color: 'var(--text-primary)' }}>{s.truckNo}</strong></span>}
+                  {(s.trackingNo || s.truckNo) && (
+                    <div style={{ display: 'flex', gap: '16px', marginLeft: '20px', fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {courier ? (
+                        <span>Tracking No: <strong style={{ color: 'var(--primary)', fontWeight: 800 }}>{s.trackingNo || 'N/A'}</strong>{s.truckNo ? <span style={{ marginLeft: '8px', opacity: 0.8 }}>(Vehicle: {s.truckNo})</span> : ''}</span>
+                      ) : (
+                        <span>Truck No: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{s.truckNo || 'N/A'}</strong>{s.trackingNo ? <span style={{ marginLeft: '8px', opacity: 0.8 }}>(GR: {s.trackingNo})</span> : ''}</span>
+                      )}
                     </div>
                   )}
                 </div>
