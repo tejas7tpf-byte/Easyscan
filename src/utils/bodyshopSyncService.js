@@ -34,7 +34,7 @@ const getBasePartNo = (cleanPn) => {
  * Direct Live Sync from Bodyshop Tracking Supabase Database
  * Fetches Extranet Dispatches, Part Master Bin Locations & Descriptions, and PNA/Jobcards
  * directly from Bodyshop tables (dispatch_status, dispatch_detail, part_master, jobcards).
- * Uses fetchAllRows to bypass default 1000-row pagination caps.
+ * Uses high-speed targeted queries to prevent browser timeouts.
  * 
  * @param {string} locationName - Target location (e.g. 'Vastral', 'Bopal', 'Nexa', etc.)
  */
@@ -46,19 +46,51 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
   const targetLoc = normalizeLocationName(locationName);
 
   try {
-    // 1. Fetch Part Master (Target Location first + Global fallback for unlisted items)
-    const [pmLocal, pmAll] = await Promise.all([
+    // 1. Fetch Extranet Dispatches for target location first
+    const [rawDispatchDetails, rawDispatchStatus] = await Promise.all([
+      fetchAllRows(
+        () => supabase.from('dispatch_detail').select('*').eq('location', targetLoc)
+      ).catch((err) => {
+        console.warn('dispatch_detail fetch error:', err);
+        return [];
+      }),
+      fetchAllRows(
+        () => supabase.from('dispatch_status').select('*').eq('location', targetLoc)
+      ).catch((err) => {
+        console.warn('dispatch_status fetch error:', err);
+        return [];
+      })
+    ]);
+
+    // Extract unique clean part numbers to target in part_master
+    const uniquePnSet = new Set();
+    (rawDispatchDetails || []).forEach(row => {
+      const pn = cleanPartNo(row.part_number || row.part_num);
+      if (pn) {
+        uniquePnSet.add(pn);
+        const basePn = getBasePartNo(pn);
+        if (basePn) uniquePnSet.add(basePn);
+      }
+    });
+
+    const targetPartNumbers = Array.from(uniquePnSet);
+
+    // 2. Fetch Part Master (Target Location + Specific Dispatched Part Numbers globally)
+    const [pmLocal, pmGlobal] = await Promise.all([
       fetchAllRows(
         () => supabase
           .from('part_master')
           .select('part_num, bin_location, part_desc, location')
           .eq('location', targetLoc)
       ).catch(() => []),
-      fetchAllRows(
-        () => supabase
-          .from('part_master')
-          .select('part_num, bin_location, part_desc, location')
-      ).catch(() => [])
+      targetPartNumbers.length > 0 ? (
+        fetchAllRows(
+          () => supabase
+            .from('part_master')
+            .select('part_num, bin_location, part_desc, location')
+            .in('part_num', targetPartNumbers)
+        ).catch(() => [])
+      ) : Promise.resolve([])
     ]);
 
     const pmMapLocal = new Map();
@@ -69,7 +101,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       const bin = String(row.bin_location || '').trim();
       const desc = String(row.part_desc || row.description || row.part_name || '').trim();
       if (pn) {
-        if (!map.has(pn) || (bin && bin !== 'NA' && bin !== '-')) {
+        if (!map.has(pn) || (bin && bin !== 'NA' && bin !== '-' && bin !== 'NOBIN')) {
           map.set(pn, {
             bin: bin && bin !== '-' ? bin : 'N/A',
             desc: desc || ''
@@ -79,14 +111,14 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
     };
 
     (pmLocal || []).forEach(r => addPmEntry(pmMapLocal, r));
-    (pmAll || []).forEach(r => addPmEntry(pmMapGlobal, r));
+    (pmGlobal || []).forEach(r => addPmEntry(pmMapGlobal, r));
 
     const getPartMasterInfo = (cleanPn) => {
-      // 1. Check local target location match
+      // 1. Local location match
       if (pmMapLocal.has(cleanPn)) return pmMapLocal.get(cleanPn);
-      // 2. Check global match
+      // 2. Global match
       if (pmMapGlobal.has(cleanPn)) return pmMapGlobal.get(cleanPn);
-      // 3. Check base part number match
+      // 3. Base part number match
       const basePn = getBasePartNo(cleanPn);
       if (basePn && basePn !== cleanPn) {
         if (pmMapLocal.has(basePn)) return pmMapLocal.get(basePn);
@@ -95,7 +127,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       return null;
     };
 
-    // 2. Fetch ALL PNA / Jobcards rows for Urgent Vehicle tracking (only UNRECEIVED PNA parts)
+    // 3. Fetch Jobcards for Urgent Vehicle tracking (unreceived PNA parts)
     const jcData = await fetchAllRows(
       () => supabase
         .from('jobcards')
@@ -129,17 +161,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       }
     });
 
-    // 3. Fetch Dispatch Detail & Dispatch Status from Extranet
-    const [rawDispatchDetails, rawDispatchStatus] = await Promise.all([
-      fetchAllRows(
-        () => supabase.from('dispatch_detail').select('*').eq('location', targetLoc)
-      ).catch(() => []),
-      fetchAllRows(
-        () => supabase.from('dispatch_status').select('*').eq('location', targetLoc)
-      ).catch(() => [])
-    ]);
-
-    // Process parts list from dispatch_detail
+    // 4. Enrich parts list from dispatch_detail
     const enrichedParts = (rawDispatchDetails || []).map(row => {
       const pn = String(row.part_number || row.part_num || '').trim().toUpperCase();
       const cleanPn = cleanPartNo(pn);
@@ -154,7 +176,6 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       const desc = pmInfo?.desc || String(row.part_desc || row.description || row.part_name || 'N/A').trim();
       const bin = pmInfo?.bin || 'N/A';
 
-      // Check urgent vehicle matching (exact clean PN or base PN)
       const isUrgent = urgentMap.has(cleanPn) || (getBasePartNo(cleanPn) && urgentMap.has(getBasePartNo(cleanPn)));
       const urgentDetails = urgentMap.get(cleanPn) || urgentMap.get(getBasePartNo(cleanPn)) || [];
 
@@ -172,7 +193,7 @@ export const fetchBodyshopLiveData = async (locationName = 'Vastral') => {
       };
     }).filter(Boolean);
 
-    // Process shipments list from dispatch_status
+    // 5. Process shipments list from dispatch_status
     const shipments = (rawDispatchStatus || []).map(row => {
       const invNo = String(row.invoice_no || row.fin_ctrl_no || '').trim();
       if (!invNo) return null;
